@@ -54,16 +54,29 @@ print_help() {
   cat <<'EOF'
 lxprofile — Linux Psychological Profiler
 
-Использование:
-  lxprofile               запустить профайлер (интерактивно в терминале,
-                          статично — в пайпе)
-  lxprofile -u, --update  обновить lxprofile с GitHub
-  lxprofile --rm, --remove удалить lxprofile из системы
-  lxprofile -v, --version показать версию
-  lxprofile -h, --help    показать эту справку
+ИСПОЛЬЗОВАНИЕ:
+  lxprofile [ОПЦИЯ]
 
-Управление в интерактивном режиме:
-  ↑/k ↓/j — выбор · g/G — край · m — режим · q — выход
+  Без опций запускает профайлер: в терминале — интерактивно,
+  в пайпе или не-TTY — статической сводкой.
+
+ОПЦИИ:
+  -u, --update      обновить lxprofile с GitHub
+      --rm, --remove
+                    удалить lxprofile из системы
+  -v, --version     показать версию
+  -h, --help        показать эту справку
+
+УПРАВЛЕНИЕ (интерактивный режим):
+  k, ↑              переместить выбор вверх
+  j, ↓              переместить выбор вниз
+  g                 к первому архетипу
+  G                 к последнему архетипу
+  m                 сменить режим (список / компас / статистика)
+  q                 выход
+
+Разработано Axawys.
+GitHub: https://github.com/Axawys/lxprofiler
 EOF
 }
 
