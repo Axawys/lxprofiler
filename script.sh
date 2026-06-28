@@ -6,20 +6,23 @@
 set -uo pipefail
 
 declare -A LABEL=(
-  [devops]="DevOps-инженер"
+  [devops]="DevOps"
   [programmer]="Программист"
-  [sysadmin]="Системный администратор"
+  [sysadmin]="Сис-админ"
   [minimalist]="Минималист"
-  [old_hacker]="Бородатый юниксоид"
+  [old_hacker]="Последователь Столлмана"
   [ricer]="Райсер"
   [gamer]="Геймер"
   [anonymous]="Анонимус"
-  [pentester]="Хакер"
+  [pentester]="Хацкер"
   [import_substituted]="Импортозамещённый"
   [fresh_witness]="Свидетель свежего ПО"
+  [atomic]="Атомарник"
 )
 
-declare -A DESCRIPTION=(
+# Описания градуированы по проценту наполнения класса:
+#   DESC_HIGH — 76–100%, DESC_MID — 51–75%, DESC_LOW — 21–50%, DESC_NONE — 0–20%
+declare -A DESC_HIGH=(
   [devops]="Cattle, не pets. Кластеры, пайплайны и декларативная инфраструктура важнее отдельной машины."
   [programmer]="Компиляторы, языки, редакторы. Машина для тебя — мастерская, а не витрина."
   [sysadmin]="Pets, не cattle. Живые серверы и демоны, аптайм в годах — ты знаешь каждую машину по имени."
@@ -31,7 +34,60 @@ declare -A DESCRIPTION=(
   [pentester]="Ты знаешь, где сломается чужая система. nmap греется не просто так."
   [import_substituted]="Сделано в России. Отечественный софт — твой осознанный выбор."
   [fresh_witness]="Ты крестишься на свежие релизы. Если версия не последняя — это уже легаси."
+  [atomic]="Иммутабельность и откаты. Система собирается декларативно, софт живёт во Flatpak и контейнерах, а не в корне."
 )
+declare -A DESC_MID=(
+  [devops]="Ты уверенно живёшь в контейнерах и CI, хотя сервера руками тоже трогаешь."
+  [programmer]="Ты пишешь код регулярно — пусть это и не единственное, чем ты живёшь."
+  [sysadmin]="Сервисы и демоны тебе привычны, ты держишь систему в порядке."
+  [minimalist]="Лишнего не держишь и любишь, когда система не шумит фоном."
+  [old_hacker]="Уважаешь Unix-way и свободный софт, частенько уходишь в консоль."
+  [ricer]="Ты заметно настраиваешь окружение под себя — внешний вид важен."
+  [gamer]="Ты играешь на Linux всерьёз, и Proton/Wine тебе не в новинку."
+  [anonymous]="Приватность для тебя не пустой звук — шифруешь и прячешь трафик."
+  [pentester]="Инструменты аудита у тебя в ходу — ты умеешь искать дыры."
+  [import_substituted]="Отечественный стек тебе не чужд — используешь его сознательно."
+  [fresh_witness]="Ты любишь новое: Wayland, Rust, свежие версии — твоя зона комфорта."
+  [atomic]="Ты тяготеешь к иммутабельности: Flatpak, контейнеры, декларативные конфиги."
+)
+declare -A DESC_LOW=(
+  [devops]="Иногда поднимаешь Docker или трогаешь k8s, но инфраструктура — не твоя стихия."
+  [programmer]="Пара языков и редактор есть, но до «я программист» пока далеко."
+  [sysadmin]="Иногда правишь конфиг или смотришь логи, но серверов на тебе не висит."
+  [minimalist]="Кое-где наводишь аскезу, но и от удобств не отказываешься."
+  [old_hacker]="Иногда тянет к олдскулу, но и в проприетарщине живёшь спокойно."
+  [ricer]="Пару тем поменял, но до бесконечного тюнинга конфигов не доходит."
+  [gamer]="Иногда запускаешь игру-другую, но геймингом это не назвать."
+  [anonymous]="Иногда поднимаешь VPN или шифруешь файл, но паранойи нет."
+  [pentester]="Иногда сканируешь сеть из любопытства, но не более."
+  [import_substituted]="Местами проскакивает российский софт, но не как принцип."
+  [fresh_witness]="Что-то новое пробуешь, но стабильность всё же ближе."
+  [atomic]="Пара Flatpak'ов есть, но до атомарной философии далеко."
+)
+declare -A DESC_NONE=(
+  [devops]="Оркестрация и пайплайны проходят мимо тебя. И, кажется, тебя это устраивает."
+  [programmer]="Код ты если и видишь, то чужой. Терминал открываешь по необходимости."
+  [sysadmin]="systemctl и journalctl — не твой язык. Машина просто должна работать."
+  [minimalist]="Минимализм — не про тебя: пусть стоит всё, что может пригодиться."
+  [old_hacker]="GNU, Emacs и init-войны — не твои легенды. Ты пришёл уже при systemd."
+  [ricer]="Дефолтная тема — и так сойдёт. Скриншот рабочего стола ты не запостишь."
+  [gamer]="Игры на этой машине — гость редкий. Тут работают, а не фрагают."
+  [anonymous]="Ты не прячешься: ни Tor, ни шифрования — твои данные открыты миру."
+  [pentester]="nmap и Metasploit — не твои инструменты. Чужие порты тебя не зовут."
+  [import_substituted]="Импортозамещение прошло мимо: в твоём стеке его и не видно."
+  [fresh_witness]="Хайповые новинки тебя не трогают — пусть сначала отлежатся пару лет."
+  [atomic]="Корень ты правишь руками и не боишься: атомарность — не твой путь."
+)
+
+# Возвращает описание класса с учётом процента наполнения
+describe() {
+  local key=$1 pct=$2
+  if   (( pct >= 76 )); then printf '%s' "${DESC_HIGH[$key]}"
+  elif (( pct >= 51 )); then printf '%s' "${DESC_MID[$key]}"
+  elif (( pct >= 21 )); then printf '%s' "${DESC_LOW[$key]}"
+  else                       printf '%s' "${DESC_NONE[$key]}"
+  fi
+}
 
 declare -A score=()
 declare -A reasons=()
@@ -78,6 +134,7 @@ case "$DISTRO_ALL" in
   # ── Отечественные ──
   *Astra*|*astra*)             add import_substituted 18 "Astra Linux"; add sysadmin 6 "корпоративная ОС"; add anonymous 4 "мандатный доступ" ;;
   *RED\ OS*|*RedOS*|*redos*)   add import_substituted 18 "RED OS"; add sysadmin 6 "серверная ОС" ;;
+  *ALT*Atomic*|*"ALT Atomic"*) add atomic 14 "ALT Atomic"; add import_substituted 14 "ALT (отеч.)"; add fresh_witness 4 "immutable" ;;
   *ALT\ *|*altlinux*|*"ALT "*) add import_substituted 16 "ALT Linux"; add old_hacker 4 "Sisyphus" ;;
   *ROSA*|*rosa*)               add import_substituted 16 "ROSA Linux" ;;
   *Calculate*|*calculate*)     add import_substituted 14 "Calculate Linux"; add old_hacker 6 "Gentoo-основа" ;;
@@ -88,10 +145,17 @@ case "$DISTRO_ALL" in
   *EndeavourOS*) add old_hacker 8 "EndeavourOS"; add fresh_witness 6 "близко к Arch (rolling)" ;;
   *Manjaro*)     add fresh_witness 5 "Manjaro (rolling)"; add minimalist 4 "удобный Arch" ;;
   *Arch*)        add old_hacker 8 "Arch Linux"; add fresh_witness 6 "rolling-release"; add programmer 4 "контроль над окружением" ;;
-  # ── Fedora / атомарные / игровые ──
-  *Bazzite*)     add gamer 14 "Bazzite"; add fresh_witness 8 "атомарная ОС" ;;
+  # ── Атомарные / иммутабельные ──
+  *Bazzite*)                        add atomic 12 "Bazzite (атомарная)"; add gamer 12 "Bazzite" ;;
+  *Silverblue*|*Kinoite*|*Sericea*) add atomic 14 "атомарная Fedora"; add fresh_witness 8 "immutable" ;;
+  *MicroOS*|*Aeon*|*Kalpa*)         add atomic 14 "openSUSE MicroOS/Aeon"; add devops 5 "transactional-update" ;;
+  *Vanilla*OS*|*VanillaOS*)         add atomic 14 "Vanilla OS"; add fresh_witness 6 "immutable" ;;
+  *blendOS*)                        add atomic 12 "blendOS"; add fresh_witness 6 "мульти-дистро" ;;
+  *"GNOME OS"*)                     add atomic 12 "GNOME OS"; add fresh_witness 6 "immutable" ;;
+  *SteamOS*)                        add atomic 8 "SteamOS"; add gamer 12 "SteamOS (Steam Deck)" ;;
+  *Endless*)                        add atomic 8 "Endless OS"; add minimalist 4 "из коробки" ;;
+  # ── Fedora / игровые ──
   *Nobara*)      add gamer 12 "Nobara"; add fresh_witness 6 "Fedora для игр" ;;
-  *Silverblue*|*Kinoite*) add fresh_witness 12 "атомарная Fedora"; add devops 6 "immutable" ;;
   *Fedora*)      add fresh_witness 12 "Fedora"; add programmer 8 "свежий инструментарий" ;;
   # ── Debian / Ubuntu семейство ──
   *Pop\!_OS*)    add gamer 10 "Pop!_OS"; add programmer 5 "удобство из коробки" ;;
@@ -109,7 +173,7 @@ case "$DISTRO_ALL" in
   *Whonix*)      add anonymous 18 "Whonix" ;;
   # ── Инженерные / нишевые ──
   *openSUSE*)    add sysadmin 10 "openSUSE/YaST"; add devops 6 "корпоративный баланс" ;;
-  *NixOS*)       add devops 14 "декларативность NixOS"; add fresh_witness 10 "NixOS" ;;
+  *NixOS*)       add atomic 14 "NixOS (декларативная)"; add fresh_witness 8 "NixOS"; add old_hacker 4 "тинкеринг" ;;
   *Gentoo*)      add old_hacker 14 "Gentoo"; add programmer 5 "сборка из исходников" ;;
   *Slackware*)   add old_hacker 16 "Slackware"; add minimalist 5 "классика" ;;
   *Void*)        add old_hacker 12 "Void Linux"; add minimalist 8 "runit" ;;
@@ -176,15 +240,14 @@ RAM_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
 RAM=$(( RAM_KB / 1024 / 1024 ))
 CPU=$(nproc 2>/dev/null || echo 1)
 
-if safe_ge "$RAM" 64; then add devops 10 "64+ GB RAM"; add gamer 6 "флагманское железо"
-elif safe_ge "$RAM" 32; then add devops 6 "32+ GB RAM"; add gamer 5 "мощное железо"
+if safe_ge "$RAM" 64; then add devops 5 "64+ GB RAM"; add gamer 6 "флагманское железо"
+elif safe_ge "$RAM" 32; then add devops 3 "32+ GB RAM"; add gamer 5 "мощное железо"
 elif safe_le "$RAM" 4;  then add minimalist 10 "≤4 GB RAM"
 elif safe_le "$RAM" 8;  then add minimalist 5 "8 GB RAM"
 fi
 
-if safe_ge "$CPU" 16; then add devops 8 "16+ ядер"; add gamer 4 "много потоков"
-elif safe_ge "$CPU" 8; then add devops 4 "8+ ядер"
-fi
+# Число ядер — слабый сигнал (не делает человека devops); только мощная станция
+if safe_ge "$CPU" 16; then add gamer 4 "16+ ядер (мощная станция)"; fi
 
 # ──────────────────────────────────────────────
 # Диск
@@ -212,7 +275,7 @@ if has lvs && lvs >/dev/null 2>&1; then add sysadmin 5 "LVM"; fi
 # ──────────────────────────────────────────────
 
 if pidof systemd >/dev/null 2>&1; then
-  add sysadmin 8 "systemd"
+  :   # systemd — init по умолчанию в большинстве дистрибутивов, не считаем сигналом
 elif [[ -f /run/runit.stopit ]] || [[ -d /etc/sv ]]; then
   add old_hacker 12 "runit"
 elif [[ -d /etc/s6 ]] || has s6-svscan; then
@@ -277,19 +340,17 @@ has binwalk     && add pentester 6  "binwalk"
 has volatility  && add pentester 8  "Volatility"
 has wpscan      && add pentester 6  "WPScan"
 
-# Защитные механизмы → Системный администратор (не «паранойя»)
+# Защитные механизмы. SELinux/AppArmor/файрвол включены ПО УМОЛЧАНИЮ во многих
+# дистрибутивах (Fedora, Ubuntu, RHEL), поэтому сами по себе не считаются
+# сигналом. Учитываем только то, что ставят и настраивают осознанно.
 has fail2ban && add sysadmin 6 "fail2ban"
-if has ufw || has firewalld || has nft; then add sysadmin 3 "файрвол"; fi
-if [[ -d /sys/fs/selinux ]]; then add sysadmin 5 "SELinux"
-elif [[ -d /sys/kernel/security/apparmor ]]; then add sysadmin 4 "AppArmor"
-fi
 
 # ──────────────────────────────────────────────
 # Контейнеры, оркестрация, IaC → DevOps (эфемерное, декларативное)
 # ──────────────────────────────────────────────
 
-has docker     && add devops 10 "Docker"
-has podman     && { add devops 10 "Podman"; add anonymous 3 "rootless-контейнеры"; }
+has docker     && add devops 5 "Docker (установлен)"
+has podman     && { add devops 5 "Podman (установлен)"; add anonymous 3 "rootless-контейнеры"; }
 has kubectl    && add devops 14 "Kubernetes"
 has k9s        && add devops 8  "k9s"
 has helm       && add devops 8  "Helm"
@@ -322,38 +383,58 @@ if has mysql || has mariadb; then add sysadmin 6 "MySQL/MariaDB"; fi
 has redis-cli && add sysadmin 5 "Redis"
 has mongod    && add devops 5 "MongoDB"
 if has sshd || [[ -f /etc/ssh/sshd_config ]]; then add sysadmin 5 "SSH-сервер"; fi
-if has htop || has btop || has glances; then add sysadmin 4 "мониторинг процессов"; fi
+if has htop || has btop || has glances; then add sysadmin 3 "мониторинг процессов"; fi
 has prometheus && { add sysadmin 6 "Prometheus"; add devops 3 "метрики"; }
 has grafana    && { add sysadmin 6 "Grafana"; add devops 3 "дашборды"; }
-# Бэкапы — визитная карточка классического админа
+# Бэкапы — визитная карточка классического админа (ставятся осознанно)
 if has borg || has restic || has rsnapshot || has duplicity; then add sysadmin 8 "бэкапы (borg/restic)"; fi
-has rsync     && add sysadmin 3 "rsync"
-has smartctl  && add sysadmin 4 "S.M.A.R.T.-мониторинг"
-if has crontab && [[ -d /var/spool/cron || -f /etc/crontab ]]; then add sysadmin 4 "cron-задачи"; fi
-has logrotate && add sysadmin 3 "logrotate"
+has smartctl  && add sysadmin 3 "S.M.A.R.T.-мониторинг"
+# rsync, cron, logrotate предустановлены почти везде — не сигнал;
+# реальное использование ловим в поведенческом анализе ниже.
 
 # ──────────────────────────────────────────────
 # Разработка → Программист
 # ──────────────────────────────────────────────
 
+# Языки и рантаймы. python/perl/java часто предустановлены или приходят
+# зависимостью, поэтому одно лишь их наличие не делает человека программистом.
+# Засчитываем осознанно установленные рантаймы и реальные следы разработки.
 dev_count=0
-for lang in python3 python node deno bun rustc go java ruby php elixir julia lua perl zig haskell scala kotlin; do
-  if has "$lang"; then
-    add programmer 3 "$lang"
-    dev_count=$(( dev_count + 1 ))
-  fi
+for lang in node deno bun rustc go zig elixir julia haskell scala kotlin crystal nim ocaml; do
+  if has "$lang"; then add programmer 3 "$lang"; dev_count=$(( dev_count + 1 )); fi
 done
+# Интерпретатор, который нередко предустановлен — слабый сигнал
+has ruby && { add programmer 1 "ruby"; dev_count=$(( dev_count + 1 )); }
 
-if safe_ge "$dev_count" 6; then add programmer 12 "полиглот (6+ языков)"
-elif safe_ge "$dev_count" 3; then add programmer 5 "несколько языков"
+# Python есть почти везде по умолчанию: засчитываем только при следах разработки
+if has python3 || has python; then
+  if has pyenv || has poetry || has pipx || has virtualenv \
+     || [[ -d "${HOME:-}/.virtualenvs" ]] \
+     || compgen -G "${HOME:-}/.local/lib/python*/site-packages" >/dev/null 2>&1; then
+    add programmer 3 "Python + инструменты разработки"; dev_count=$(( dev_count + 1 ))
+  fi
 fi
 
-if has gcc || has clang; then add programmer 4 "C/C++"; add old_hacker 4 "gcc/clang"; fi
-if has make || has cmake; then add programmer 4 "сборочные системы"; fi
-has rustc && { add fresh_witness 8 "Rust"; add programmer 4 "memory-safety"; }
-has go    && { add devops 5 "Go"; add programmer 3 "Go"; }
-has git   && add programmer 5 "Git"
-has docker-compose && add devops 5 "Compose"
+# Пользовательские тулчейны и менеджеры версий — явный признак разработчика
+[[ -d "${HOME:-}/.cargo"  ]] && { add programmer 5 "Cargo"; add fresh_witness 2 "Rust toolchain"; }
+[[ -d "${HOME:-}/.rustup" ]] && add programmer 2 "rustup"
+[[ -d "${HOME:-}/go"      ]] && add programmer 3 "Go workspace"
+[[ -d "${HOME:-}/.npm"    ]] && add programmer 3 "npm-проекты"
+if has asdf || has nvm || has pyenv || has rbenv || has sdk; then add programmer 5 "менеджер версий языков"; fi
+
+# Настроенный git (есть секция [user]) — пользователь реально коммитит
+if [[ -f "${HOME:-}/.gitconfig" ]] && grep -qi '\[user\]' "${HOME:-}/.gitconfig" 2>/dev/null; then
+  add programmer 6 "настроенный git (user.*)"
+fi
+
+if safe_ge "$dev_count" 5; then add programmer 10 "полиглот (5+ языков)"
+elif safe_ge "$dev_count" 3; then add programmer 4 "несколько языков"
+fi
+
+if has gcc || has clang; then add old_hacker 3 "gcc/clang"; fi
+if has make && has cmake; then add programmer 3 "сборочные системы"; fi
+has rustc && add fresh_witness 6 "Rust"
+has docker-compose && add devops 4 "Compose"
 
 # Редакторы
 if has vim || has nvim; then add old_hacker 6 "Vim/Neovim"; add programmer 4 "модальное редактирование"; fi
@@ -381,12 +462,15 @@ has mullvad-browser && add anonymous 8 "Mullvad Browser"
 # Пакетные менеджеры
 # ──────────────────────────────────────────────
 
-has flatpak && add minimalist 3 "Flatpak"
-has snap    && add programmer 2 "Snap"
-has nix     && { add devops 8 "Nix"; add fresh_witness 4 "декларативные пакеты"; }
+has flatpak && add atomic 4 "Flatpak"
+has snap    && add minimalist 2 "Snap"
+has nix     && { add atomic 8 "Nix"; add fresh_witness 4 "декларативные пакеты"; }
 has brew    && add programmer 4 "Homebrew"
+# Контейнеры для разработки поверх иммутабельной ОС — характерны для атомарников
+if has distrobox || has toolbox || has toolbx; then add atomic 8 "distrobox/toolbox"; fi
+if has rpm-ostree || has ostree || has bootc; then add atomic 10 "ostree-система"; fi
 if has yay || has paru; then add old_hacker 4 "AUR-хелпер"; fi
-if has guix; then add old_hacker 8 "GNU Guix"; add fresh_witness 6 "функциональный пакетинг"; fi
+if has guix; then add atomic 8 "GNU Guix"; add old_hacker 6 "функциональный пакетинг"; fi
 
 # ──────────────────────────────────────────────
 # Игры → Геймер
@@ -448,12 +532,20 @@ has xterm     && add old_hacker 3 "xterm"
 # Dotfiles
 # ──────────────────────────────────────────────
 
-if [[ -d "${HOME:-}" ]]; then
-  DOTS=$(find "$HOME" -maxdepth 1 -name ".*" ! -name ".." 2>/dev/null | wc -l)
-  if safe_gt "$DOTS" 30; then add ricer 10 "30+ dotfiles"
-  elif safe_gt "$DOTS" 20; then add ricer 7 "много dotfiles"
-  elif safe_le "$DOTS" 5; then add minimalist 8 "минимум dotfiles"
-  fi
+# Райсинг определяем по конфигам инструментов кастомизации, а НЕ по числу
+# скрытых папок в $HOME — их и так десятки у любого DE (.config, .cache,
+# .mozilla, .pki, .gnupg…), из-за чего раньше любой пользователь GNOME
+# попадал в «райсеры».
+RICE_CONFIGS=0
+for cfg in hypr waybar polybar picom compton rofi wofi dunst mako eww \
+           sway i3 bspwm awesome qtile river niri \
+           kitty alacritty wezterm foot \
+           fastfetch neofetch wal swaylock wlogout starship; do
+  [[ -e "${HOME:-}/.config/$cfg" ]] && RICE_CONFIGS=$(( RICE_CONFIGS + 1 ))
+done
+if safe_ge "$RICE_CONFIGS" 6;   then add ricer 12 "кастомных конфигов: ${RICE_CONFIGS}"
+elif safe_ge "$RICE_CONFIGS" 3; then add ricer 6  "кастомизация окружения (${RICE_CONFIGS})"
+elif [[ "$RICE_CONFIGS" -eq 0 ]]; then add minimalist 5 "без кастомизации окружения"
 fi
 
 if [[ -d "${HOME:-}/dotfiles/.git" ]] || [[ -d "${HOME:-}/.dotfiles/.git" ]]; then
@@ -461,6 +553,49 @@ if [[ -d "${HOME:-}/dotfiles/.git" ]] || [[ -d "${HOME:-}/.dotfiles/.git" ]]; th
   add programmer 4 "управление конфигами"
 fi
 if has stow || has chezmoi; then add ricer 5 "менеджер dotfiles"; add devops 3 "воспроизводимые конфиги"; fi
+
+# ──────────────────────────────────────────────
+# Поведенческий анализ: shell-конфиги и история команд
+#   Отличаем тех, кто РЕАЛЬНО пользуется инструментом, от тех, у кого он
+#   просто установлен (зависимостью или по умолчанию в дистрибутиве).
+# ──────────────────────────────────────────────
+
+BEHAVIOR=""
+for f in "${HOME:-}/.bash_history" "${HOME:-}/.zsh_history" \
+         "${HOME:-}/.local/share/fish/fish_history" \
+         "${HOME:-}/.bashrc" "${HOME:-}/.zshrc" "${HOME:-}/.bash_aliases" \
+         "${HOME:-}/.config/fish/config.fish" "${HOME:-}/.profile"; do
+  [[ -r $f ]] && BEHAVIOR+=$'\n'"$(cat "$f" 2>/dev/null)"
+done
+
+# behav PATTERN CLASS PTS REASON THRESHOLD
+# Начисляет очки, если команда встречается в истории/конфигах не реже THRESHOLD раз.
+behav() {
+  local pat=$1 class=$2 pts=$3 reason=$4 thr=$5 n
+  [[ -z $BEHAVIOR ]] && return
+  n=$(grep -aowE "$pat" <<< "$BEHAVIOR" 2>/dev/null | wc -l)
+  n=${n:-0}
+  if (( n >= thr )); then add "$class" "$pts" "${reason} (×${n})"; fi
+}
+
+if [[ -n $BEHAVIOR ]]; then
+  behav 'docker|docker-compose'                            devops        7  "docker в работе"             5
+  behav 'kubectl|helm|k9s|kustomize'                       devops        9  "kubernetes в работе"         3
+  behav 'terraform|tofu|ansible|pulumi'                    devops        8  "IaC в истории"               3
+  behav 'systemctl|journalctl'                             sysadmin      7  "управление сервисами"        6
+  behav 'ssh|scp|sftp'                                     sysadmin      5  "удалённые хосты"             8
+  behav 'nginx|certbot|iptables|nft|ufw'                   sysadmin      6  "серверная эксплуатация"      4
+  behav 'psql|mysql|mariadb|redis-cli'                     sysadmin      5  "работа с БД"                 4
+  behav 'make|cargo|npm|pnpm|yarn|pip|pip3|gradle|mvn'     programmer    7  "сборка/разработка"           6
+  behav 'git'                                              programmer    6  "git в повседневной работе"  12
+  behav 'vim|nvim|emacs'                                   programmer    4  "редактор кода в истории"    10
+  behav 'nmap|nikto|sqlmap|msfconsole|hydra|hashcat|aircrack-ng|gobuster' pentester 11 "пентест в истории" 2
+  behav 'tor|proxychains|openvpn|wg|gpg|veracrypt'         anonymous     6  "приватность в истории"       3
+  behav 'pacman|yay|paru|makepkg|emerge'                   old_hacker    4  "ручное управление пакетами"  8
+  behav 'flatpak|distrobox|toolbox|rpm-ostree|nixos-rebuild|nix-shell|nix-env' atomic 7 "иммутабельный workflow" 3
+  behav 'nix'                                              fresh_witness 4  "Nix в истории"               3
+  behav 'steam|lutris|wine|proton|protontricks'            gamer         6  "игры в истории"              2
+fi
 
 # ──────────────────────────────────────────────
 # Нормализация и сортировка
@@ -560,7 +695,7 @@ print_static() {
   local W=${sorted_keys[0]} S=${sorted_keys[1]} T=${sorted_keys[2]}
   echo
   echo "${BOLD}${GREEN}▶ Ты — ${LABEL[$W]}${RESET}"
-  echo "  ${DESCRIPTION[$W]}"
+  echo "  $(describe "$W" "${norm_score[$W]}")"
   echo "${BOLD}Что повлияло:${RESET} ${DIM}${reasons[$W]}${RESET}"
   echo
   echo "${DIM}  2. ${LABEL[$S]} (${norm_score[$S]}%) — ${reasons[$S]:-—}${RESET}"
@@ -624,7 +759,7 @@ render_frame() {
   sk=${sorted_keys[sel]}
   used=0
   printf "${BOLD}${GREEN}▶ %s — %d%%${RESET}\n" "${LABEL[$sk]}" "${norm_score[$sk]}"; used=$(( used + 1 ))
-  wrap_into "${DESCRIPTION[$sk]}" "$WRAP_W"
+  wrap_into "$(describe "$sk" "${norm_score[$sk]}")" "$WRAP_W"
   for l in "${WRAPPED[@]}"; do printf "  %s\n" "$l"; used=$(( used + 1 )); done
   printf '\n'; used=$(( used + 1 ))
   printf "${BOLD}  Что повлияло:${RESET}\n"; used=$(( used + 1 ))
@@ -664,7 +799,7 @@ interactive_view() {
   # чтобы раскладка не «прыгала» при смене выделения
   DETAIL_H=0
   for sk in "${sorted_keys[@]}"; do
-    wrap_into "${DESCRIPTION[$sk]}" "$WRAP_W"; d=${#WRAPPED[@]}
+    wrap_into "$(describe "$sk" "${norm_score[$sk]}")" "$WRAP_W"; d=${#WRAPPED[@]}
     wrap_into "${reasons[$sk]:-—}" "$WRAP_W"; c=${#WRAPPED[@]}
     total=$(( 1 + d + 1 + 1 + c ))   # заголовок + описание + пусто + «Что повлияло:» + критерии
     (( total > DETAIL_H )) && DETAIL_H=$total
@@ -694,7 +829,7 @@ interactive_view() {
   local W=${sorted_keys[0]}
   echo
   echo "${BOLD}${GREEN}▶ Твой профиль: ${LABEL[$W]}${RESET}"
-  echo "${DIM}  ${DESCRIPTION[$W]}${RESET}"
+  echo "${DIM}  $(describe "$W" "${norm_score[$W]}")${RESET}"
   echo "${DIM}  Просмотр закрыт по «q». До встречи! 🐧${RESET}"
   echo
 }
