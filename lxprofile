@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# lxprofile — Linux Psychological Profiler
+# Точка входа: разбор аргументов и запуск движка из lib/.
+# Requires: bash 4.0+, standard coreutils, tput (ncurses); git — для --update
+
+# Без set -e: grep, pidof, (( )) штатно возвращают ненулевой код
+set -uo pipefail
+
+# ──────────────────────────────────────────────
+# Определяем реальный каталог скрипта (с учётом симлинков из ~/.local/bin)
+# ──────────────────────────────────────────────
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -h "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+LXPROFILE_ROOT="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+LXPROFILE_LIB="$LXPROFILE_ROOT/lib"
+
+source "$LXPROFILE_LIB/version.sh"
+
+# ──────────────────────────────────────────────
+# Подкоманды: --version / --help / --update
+# ──────────────────────────────────────────────
+
+print_version() {
+  local v="$LXPROFILE_VERSION"
+  if command -v git >/dev/null 2>&1 \
+     && git -C "$LXPROFILE_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    local hash
+    hash=$(git -C "$LXPROFILE_ROOT" rev-parse --short HEAD 2>/dev/null)
+    [[ -n $hash ]] && v="$v ($hash)"
+  fi
+  printf 'lxprofile %s\n' "$v"
+}
+
+print_help() {
+  cat <<'EOF'
+lxprofile — Linux Psychological Profiler
+
+Использование:
+  lxprofile             запустить профайлер (интерактивно в терминале,
+                        статично — в пайпе)
+  lxprofile --update    обновить lxprofile с GitHub
+  lxprofile --version   показать версию
+  lxprofile --help      показать эту справку
+
+Управление в интерактивном режиме:
+  ↑/k ↓/j — выбор · g/G — край · m — режим · q — выход
+EOF
+}
+
+do_update() {
+  if ! command -v git >/dev/null 2>&1; then
+    printf 'Для обновления нужен git, но он не найден.\n' >&2
+    return 1
+  fi
+  if ! git -C "$LXPROFILE_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    printf 'Каталог установки не является git-репозиторием:\n  %s\n' "$LXPROFILE_ROOT" >&2
+    printf 'Переустановите утилиту через install.sh.\n' >&2
+    return 1
+  fi
+  printf 'Обновляю lxprofile в %s …\n' "$LXPROFILE_ROOT"
+  if ! git -C "$LXPROFILE_ROOT" pull --ff-only; then
+    printf 'Не удалось обновить (возможны локальные изменения).\n' >&2
+    return 1
+  fi
+  # Перечитываем версию после обновления
+  source "$LXPROFILE_LIB/version.sh"
+  printf 'Готово. Текущая версия: %s\n' "$LXPROFILE_VERSION"
+}
+
+case "${1:-}" in
+  -v|--version) print_version; exit 0 ;;
+  -h|--help)    print_help;    exit 0 ;;
+  --update)     do_update;     exit $? ;;
+  "")           : ;;  # без аргументов — запускаем профайлер
+  *)
+    printf 'Неизвестный аргумент: %s\n\n' "$1" >&2
+    print_help >&2
+    exit 1
+    ;;
+esac
+
+# ──────────────────────────────────────────────
+# Движок: данные → утилиты → анализ → отрисовка
+# Порядок важен: detect.sh использует data.sh и helpers.sh.
+# ──────────────────────────────────────────────
+source "$LXPROFILE_LIB/data.sh"
+source "$LXPROFILE_LIB/helpers.sh"
+source "$LXPROFILE_LIB/detect.sh"
+source "$LXPROFILE_LIB/compass.sh"
+source "$LXPROFILE_LIB/stats.sh"
+source "$LXPROFILE_LIB/render.sh"
+
+# ──────────────────────────────────────────────
+# Точка входа
+# В настоящем терминале — интерактивный режим; для пайпа — статическая сводка.
+# ──────────────────────────────────────────────
+if [[ -t 0 && -t 1 ]] && has tput; then
+  interactive_view
+else
+  print_static
+fi

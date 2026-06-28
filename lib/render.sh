@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+# lib/render.sh — оформление, статический и интерактивный вывод
+
+# ──────────────────────────────────────────────
+# Оформление
+# ──────────────────────────────────────────────
+
+BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
+GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'
+
+make_bar() {
+  local p=$1 filled=$(( $1 / 5 )) i=0 b=""
+  while (( i < filled )); do b+="█"; i=$(( i + 1 )); done
+  while (( i < 20 ));     do b+="░"; i=$(( i + 1 )); done
+  printf '%s' "$b"
+}
+
+# ──────────────────────────────────────────────
+# Сборка прокручиваемого тела (BODY) для интерактивного просмотра
+# ──────────────────────────────────────────────
+
+declare -a WRAPPED=()
+
+# wrap_into TEXT WIDTH — переносит текст по словам, кладёт строки в массив WRAPPED
+wrap_into() {
+  WRAPPED=()
+  local text=$1 width=$2
+  local -a words=()
+  read -ra words <<< "$text"
+  local cur="" w
+  for w in "${words[@]}"; do
+    if [[ -z $cur ]]; then
+      cur=$w
+    elif (( ${#cur} + 1 + ${#w} > width )); then
+      WRAPPED+=("$cur")
+      cur=$w
+    else
+      cur="$cur $w"
+    fi
+  done
+  [[ -n $cur ]] && WRAPPED+=("$cur")
+}
+
+# ──────────────────────────────────────────────
+# Статический вывод (для пайпов / не-TTY)
+# ──────────────────────────────────────────────
+
+print_static() {
+  echo
+  echo "${BOLD}╔══════════════════════════════════════════╗${RESET}"
+  echo "${BOLD}║     Linux Psychological Profiler v4.0    ║${RESET}"
+  echo "${BOLD}╚══════════════════════════════════════════╝${RESET}"
+  echo "${DIM}  Дистрибутив : ${DISTRO}${RESET}"
+  echo "${DIM}  Ядро        : $(uname -r 2>/dev/null || echo '?')${RESET}"
+  echo "${DIM}  Init        : $(ps -p 1 -o comm= 2>/dev/null || echo '?')${RESET}"
+  echo
+
+  local maxlen=0 key label len
+  for key in "${sorted_keys[@]}"; do
+    label="${LABEL[$key]}"; len=${#label}
+    (( len > maxlen )) && maxlen=$len
+  done
+
+  local p color pad
+  for key in "${sorted_keys[@]}"; do
+    p=${norm_score[$key]}; label="${LABEL[$key]}"; len=${#label}
+    if safe_ge "$p" 80; then color=$GREEN
+    elif safe_ge "$p" 50; then color=$YELLOW
+    else color=$DIM; fi
+    pad=$(( maxlen - len ))
+    printf "${color}%s%*s${RESET}  %3d%%  ${color}%s${RESET}\n" "$label" "$pad" "" "$p" "$(make_bar "$p")"
+  done
+
+  local W=${sorted_keys[0]} S=${sorted_keys[1]} T=${sorted_keys[2]}
+  echo
+  echo "${BOLD}${GREEN}▶ Ты — ${LABEL[$W]}${RESET}"
+  echo "  $(describe "$W" "${norm_score[$W]}")"
+  echo "${BOLD}Что повлияло:${RESET} ${DIM}${reasons[$W]}${RESET}"
+  echo
+  echo "${DIM}  2. ${LABEL[$S]} (${norm_score[$S]}%) — ${reasons[$S]:-—}${RESET}"
+  echo "${DIM}  3. ${LABEL[$T]} (${norm_score[$T]}%) — ${reasons[$T]:-—}${RESET}"
+  echo
+}
+
+# ──────────────────────────────────────────────
+# Интерактивный просмотрщик критериев
+# ──────────────────────────────────────────────
+
+REPLY_KEY=""
+read_key() {
+  local k="" rest="" tilde=""
+  IFS= read -rsn1 k
+  if [[ $k == $'\x1b' ]]; then
+    IFS= read -rsn2 -t 0.05 rest 2>/dev/null
+    k+=$rest
+    if [[ $rest == '[5' || $rest == '[6' ]]; then
+      IFS= read -rsn1 -t 0.05 tilde 2>/dev/null
+      k+=$tilde
+    fi
+  fi
+  REPLY_KEY=$k
+}
+
+_view_cleanup() {
+  tput cnorm 2>/dev/null
+  tput rmcup 2>/dev/null
+}
+
+# ── Общие части кадра ──────────────────────────────────────────
+render_header() {
+  printf '%s\n\n' "${BOLD}${CYAN}  🐧 $1${RESET}"
+}
+
+render_footer() {
+  printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
+  printf '%s' "${DIM}  ${BOLD}j/k${RESET}${DIM}·${BOLD}↑↓${RESET}${DIM} — выбор · ${BOLD}${CYAN}m${RESET}${DIM} — режим [${MODE_NAME}] · ${BOLD}g/G${RESET}${DIM} — край · ${BOLD}${YELLOW}q${RESET}${DIM} — выход${RESET}"
+}
+
+# ── Режим «Список» ─────────────────────────────────────────────
+render_list() {
+  local sel=$1 i sk lbl p pad used l
+  render_header "Профиль архетипов"
+
+  for i in "${!sorted_keys[@]}"; do
+    sk=${sorted_keys[i]}; lbl=${LABEL[$sk]}; p=${norm_score[$sk]}
+    pad=$(( MAXLEN - ${#lbl} ))
+    if (( i == sel )); then
+      printf "${GREEN}${BOLD}▶ %s%*s  %3d%%  %s${RESET}\n" "$lbl" "$pad" "" "$p" "$(make_bar "$p")"
+    else
+      printf "${DIM}  %s%*s  %3d%%  %s${RESET}\n" "$lbl" "$pad" "" "$p" "$(make_bar "$p")"
+    fi
+  done
+
+  printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
+
+  sk=${sorted_keys[sel]}; used=0
+  printf "${BOLD}${GREEN}▶ %s — %d%%${RESET}\n" "${LABEL[$sk]}" "${norm_score[$sk]}"; used=$(( used + 1 ))
+  wrap_into "$(describe "$sk" "${norm_score[$sk]}")" "$WRAP_W"
+  for l in "${WRAPPED[@]}"; do printf "  %s\n" "$l"; used=$(( used + 1 )); done
+  printf '\n'; used=$(( used + 1 ))
+  printf "${BOLD}  Что повлияло:${RESET}\n"; used=$(( used + 1 ))
+  wrap_into "${reasons[$sk]:-—}" "$WRAP_W"
+  for l in "${WRAPPED[@]}"; do printf "${DIM}  %s${RESET}\n" "$l"; used=$(( used + 1 )); done
+  while (( used < DETAIL_H )); do printf '\n'; used=$(( used + 1 )); done
+
+  render_footer
+}
+
+# ── Диспетчер кадра ────────────────────────────────────────────
+render_frame() {
+  local sel=$1
+  tput cup 0 0 2>/dev/null
+  tput ed   2>/dev/null
+  case "$VIEW_MODE" in
+    compass) render_compass "$sel" ;;
+    stats)   render_stats ;;
+    *)       render_list "$sel" ;;
+  esac
+}
+
+# Глобальные параметры раскладки интерактивного вида
+MAXLEN=0
+WRAP_W=72
+DETAIL_H=0
+KERNEL=""
+INIT1=""
+VIEW_MODE="list"
+MODE_NAME="список"
+
+interactive_view() {
+  local cols sk d c total l last sel=0
+
+  KERNEL=$(uname -r 2>/dev/null || echo '?')
+  INIT1=$(ps -p 1 -o comm= 2>/dev/null || echo '?')
+  compute_compass
+  compute_stats
+
+  cols=$(tput cols 2>/dev/null || echo 80)
+  WRAP_W=$(( cols - 4 ))
+  (( WRAP_W > 76 )) && WRAP_W=76
+  (( WRAP_W < 30 )) && WRAP_W=30
+
+  # Ширина колонки меток
+  MAXLEN=0
+  for sk in "${sorted_keys[@]}"; do
+    (( ${#LABEL[$sk]} > MAXLEN )) && MAXLEN=${#LABEL[$sk]}
+  done
+
+  # Фиксированная высота нижней панели = максимум по всем классам,
+  # чтобы раскладка не «прыгала» при смене выделения
+  DETAIL_H=0
+  for sk in "${sorted_keys[@]}"; do
+    wrap_into "$(describe "$sk" "${norm_score[$sk]}")" "$WRAP_W"; d=${#WRAPPED[@]}
+    wrap_into "${reasons[$sk]:-—}" "$WRAP_W"; c=${#WRAPPED[@]}
+    total=$(( 1 + d + 1 + 1 + c ))   # заголовок + описание + пусто + «Что повлияло:» + критерии
+    (( total > DETAIL_H )) && DETAIL_H=$total
+  done
+
+  last=$(( ${#sorted_keys[@]} - 1 ))
+
+  tput smcup 2>/dev/null; tput civis 2>/dev/null
+  trap '_view_cleanup' EXIT INT TERM
+
+  while true; do
+    render_frame "$sel"
+    read_key
+    case "$REPLY_KEY" in
+      q|Q)          break ;;
+      j|$'\x1b[B')  (( sel < last )) && sel=$(( sel + 1 )) ;;
+      k|$'\x1b[A')  (( sel > 0 ))    && sel=$(( sel - 1 )) ;;
+      g)            sel=0 ;;
+      G)            sel=$last ;;
+      m|M)
+        case "$VIEW_MODE" in
+          list)    VIEW_MODE="compass"; MODE_NAME="компас" ;;
+          compass) VIEW_MODE="stats";   MODE_NAME="статистика" ;;
+          *)       VIEW_MODE="list";    MODE_NAME="список" ;;
+        esac ;;
+    esac
+  done
+
+  _view_cleanup
+  trap - EXIT INT TERM
+
+  # Оповещение о выходе
+  local W=${sorted_keys[0]}
+  echo
+  echo "${BOLD}${GREEN}▶ Твой профиль: ${LABEL[$W]}${RESET}"
+  echo "${DIM}  $(describe "$W" "${norm_score[$W]}")${RESET}"
+  echo "${DIM}  Просмотр закрыт по «q». До встречи! 🐧${RESET}"
+  echo
+}

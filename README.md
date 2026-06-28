@@ -6,18 +6,45 @@
 а затем распределяет очки между 12 архетипами и показывает результат в виде
 интерактивного TUI.
 
-## Быстрый старт
+## Установка
 
-Скачать, сделать исполняемым и запустить:
+Одной командой:
 
 ```bash
-wget https://raw.githubusercontent.com/Axawys/lxprofiler/main/script.sh
-chmod +x script.sh
-./script.sh
+curl -fsSL https://raw.githubusercontent.com/Axawys/lxprofiler/main/install.sh | bash
+```
+
+Скрипт клонирует репозиторий в `~/.local/share/lxprofiler` и создаёт команду
+`lxprofile` в `~/.local/bin`. После этого профайлер запускается из любого места:
+
+```bash
+lxprofile
 ```
 
 > Запуск чужих скриптов из сети — на ваш страх и риск; при желании сначала
-> просмотрите содержимое: `less script.sh`.
+> просмотрите содержимое:
+> `curl -fsSL https://raw.githubusercontent.com/Axawys/lxprofiler/main/install.sh | less`.
+
+Нужен `git`. Если `~/.local/bin` не в `$PATH`, установщик подскажет, что добавить.
+
+### Команды
+
+| Команда | Действие |
+|---------|----------|
+| `lxprofile` | запустить профайлер |
+| `lxprofile --update` | обновить утилиту с GitHub |
+| `lxprofile --version` | показать версию |
+| `lxprofile --help` | краткая справка |
+
+### Без установки
+
+Можно просто склонировать репозиторий и запустить локально:
+
+```bash
+git clone https://github.com/Axawys/lxprofiler
+cd lxprofiler
+./lxprofile
+```
 
 ---
 
@@ -92,15 +119,14 @@ chmod +x script.sh
 ## Запуск
 
 ```bash
-chmod +x script.sh
-./script.sh
+lxprofile
 ```
 
 Для статического вывода (например, чтобы сохранить результат) используйте пайп:
 
 ```bash
-./script.sh | cat
-./script.sh | tee profile.txt
+lxprofile | cat
+lxprofile | tee profile.txt
 ```
 
 ## Управление в интерактивном режиме
@@ -147,6 +173,26 @@ chmod +x script.sh
 класса и список сработавших критериев. Описание выбирается по проценту наполнения
 (четыре градации), поэтому класс с 10 % и класс со 100 % звучат по-разному.
 Логику легко расширять — достаточно добавить ещё один вызов `add`.
+
+## Структура проекта
+
+```
+lxprofile          точка входа: разбор --version/--update/--help и запуск
+install.sh         установщик одной командой
+lib/
+  version.sh       номер версии
+  data.sh          архетипы, описания, выбор текста по проценту
+  helpers.sh       add()/has()/safe_*, инициализация счёта
+  detect.sh        весь анализ системы, нормализация и сортировка
+  compass.sh       линуксоидный компас (векторы и отрисовка)
+  stats.sh         статистика истории команд
+  render.sh        оформление, статический и интерактивный вывод
+script.sh          обёртка обратной совместимости → lxprofile
+```
+
+Модули подключаются `lxprofile` по порядку: `detect.sh` опирается на `data.sh`
+и `helpers.sh`. Чтобы добавить новый сигнал, достаточно дописать вызов `add` в
+[lib/detect.sh](lib/detect.sh); новый архетип — строки в [lib/data.sh](lib/data.sh).
 
 ## Лицензия
 
