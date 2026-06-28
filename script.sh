@@ -454,6 +454,12 @@ if has gdb || has lldb; then add programmer 4 "отладчики"; fi
 if has yandex-browser || has yandex_browser || has yandex-browser-stable; then
   add import_substituted 12 "Яндекс.Браузер"
 fi
+
+# Русская локаль — слабый намёк на импортозамещение
+LOCALE_ALL="${LANG:-}|${LC_ALL:-}|${LC_CTYPE:-}|${LC_MESSAGES:-}"
+if [[ "$LOCALE_ALL" == *ru_RU* || "$LOCALE_ALL" == *ru_* ]]; then
+  add import_substituted 3 "русская локаль"
+fi
 has librewolf       && { add anonymous 6 "LibreWolf"; add ricer 3 "приватный форк"; }
 has brave           && add anonymous 4 "Brave"
 has mullvad-browser && add anonymous 8 "Mullvad Browser"
@@ -553,6 +559,96 @@ if [[ -d "${HOME:-}/dotfiles/.git" ]] || [[ -d "${HOME:-}/.dotfiles/.git" ]]; th
   add programmer 4 "управление конфигами"
 fi
 if has stow || has chezmoi; then add ricer 5 "менеджер dotfiles"; add devops 3 "воспроизводимые конфиги"; fi
+
+# ──────────────────────────────────────────────
+# Состояние системы: аптайм, возраст, пакеты, ядро, flatpak
+# ──────────────────────────────────────────────
+
+# Аптайм — длинный характерен для серверов и админов
+UPTIME_SEC=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
+UPTIME_DAYS=$(( UPTIME_SEC / 86400 ))
+if   safe_ge "$UPTIME_DAYS" 30; then add sysadmin 10 "аптайм ${UPTIME_DAYS} дн."
+elif safe_ge "$UPTIME_DAYS" 7;  then add sysadmin 5  "аптайм ${UPTIME_DAYS} дн."
+fi
+
+# Возраст установки: birth-время корня, иначе mtime machine-id как запасной вариант
+INSTALL_EPOCH=$(stat -c %W / 2>/dev/null || echo 0)
+if [[ -z "$INSTALL_EPOCH" || "$INSTALL_EPOCH" == 0 ]]; then
+  INSTALL_EPOCH=$(stat -c %Y /etc/machine-id 2>/dev/null || echo 0)
+fi
+if safe_gt "$INSTALL_EPOCH" 0; then
+  AGE_DAYS=$(( ( $(date +%s) - INSTALL_EPOCH ) / 86400 ))
+  if   safe_ge "$AGE_DAYS" 1095; then add sysadmin 8 "система живёт ${AGE_DAYS} дн. без переустановки"; add old_hacker 4 "не распыляется на переустановки"
+  elif safe_ge "$AGE_DAYS" 365;  then add sysadmin 4 "установлена больше года назад"
+  elif safe_ge "$AGE_DAYS" 0 && safe_le "$AGE_DAYS" 14; then add fresh_witness 4 "свежая установка (${AGE_DAYS} дн.)"
+  fi
+fi
+
+# Число установленных пакетов — мало пакетов = минимализм
+PKG_COUNT=0
+if   has pacman;     then PKG_COUNT=$(pacman -Qq 2>/dev/null | wc -l)
+elif has dpkg-query; then PKG_COUNT=$(dpkg-query -f '.\n' -W 2>/dev/null | wc -l)
+elif has rpm;        then PKG_COUNT=$(rpm -qa 2>/dev/null | wc -l)
+elif has apk;        then PKG_COUNT=$(apk info 2>/dev/null | wc -l)
+elif has xbps-query; then PKG_COUNT=$(xbps-query -l 2>/dev/null | wc -l)
+fi
+if safe_gt "$PKG_COUNT" 0; then
+  if   safe_le "$PKG_COUNT" 300; then add minimalist 10 "очень мало пакетов (${PKG_COUNT})"
+  elif safe_le "$PKG_COUNT" 600; then add minimalist 5  "немного пакетов (${PKG_COUNT})"
+  fi
+fi
+
+# Чужие пакеты (AUR) — практика тинкеров Arch
+if has pacman; then
+  AUR_COUNT=$(pacman -Qqm 2>/dev/null | wc -l)
+  if   safe_ge "$AUR_COUNT" 20; then add old_hacker 6 "${AUR_COUNT} пакетов из AUR"
+  elif safe_ge "$AUR_COUNT" 5;  then add old_hacker 3 "сборки из AUR"
+  fi
+fi
+
+# Кастомное / специальное ядро
+case "$(uname -r 2>/dev/null)" in
+  *zen*)            add gamer 5 "ядро Zen"; add fresh_witness 3 "тюнинг отзывчивости" ;;
+  *xanmod*)         add gamer 5 "ядро XanMod" ;;
+  *lqx*|*liquorix*) add gamer 5 "ядро Liquorix" ;;
+  *tkg*)            add gamer 5 "ядро TkG"; add old_hacker 3 "сборка ядра" ;;
+  *hardened*)       add anonymous 6 "hardened-ядро"; add pentester 3 "защищённое ядро" ;;
+  *-rt*|*rt[0-9]*)  add sysadmin 4 "realtime-ядро" ;;
+  *lts*)            add sysadmin 4 "LTS-ядро (стабильность)" ;;
+esac
+
+# Снапшоты ФС и декларативная конфигурация
+if has snapper || [[ -d /.snapshots ]]; then add sysadmin 5 "снапшоты (snapper)"; add atomic 4 "откаты ФС"; fi
+has timeshift && add sysadmin 5 "Timeshift"
+if [[ -d /etc/nixos ]] || [[ -d "${HOME:-}/.config/home-manager" ]]; then add atomic 6 "Nix/home-manager"; fi
+if has zfs || [[ -d /sys/module/zfs ]]; then add sysadmin 6 "ZFS"; add old_hacker 3 "ZFS-энтузиаст"; fi
+
+# SSH-ключи — рабочий инструмент админа/devops/разработчика
+if [[ -d "${HOME:-}/.ssh" ]]; then
+  SSH_KEYS=$(find "${HOME}/.ssh" -maxdepth 1 -name 'id_*' ! -name '*.pub' 2>/dev/null | wc -l)
+  if safe_ge "$SSH_KEYS" 1; then add devops 4 "SSH-ключи"; add sysadmin 3 "доступ к хостам"; fi
+fi
+
+# Git-репозитории в домашней директории — реальная разработка
+if [[ -d "${HOME:-}" ]]; then
+  GIT_REPOS=$(find "$HOME" -maxdepth 4 -name .git -type d 2>/dev/null | head -200 | wc -l)
+  if   safe_ge "$GIT_REPOS" 10; then add programmer 8 "${GIT_REPOS}+ git-репозиториев"
+  elif safe_ge "$GIT_REPOS" 3;  then add programmer 4 "${GIT_REPOS} git-репозитория"
+  fi
+fi
+
+# Установленные flatpak-приложения: количество и категории
+if has flatpak; then
+  FLATPAK_APPS=$(flatpak list --app --columns=application 2>/dev/null)
+  FP_COUNT=$(printf '%s\n' "$FLATPAK_APPS" | grep -c .)
+  if   safe_ge "$FP_COUNT" 15; then add atomic 8 "${FP_COUNT} flatpak-приложений"
+  elif safe_ge "$FP_COUNT" 5;  then add atomic 5 "${FP_COUNT} flatpak-приложений"
+  fi
+  grep -qiE 'torproject|mullvad|signalapp|briar|protonvpn|monero' <<< "$FLATPAK_APPS" && add anonymous 5 "приватные flatpak"
+  grep -qiE 'valvesoftware\.Steam|heroicgameslauncher|net\.lutris|Bottles|RetroArch|prismlauncher' <<< "$FLATPAK_APPS" && add gamer 6 "игровые flatpak"
+  grep -qiE 'visualstudio|jetbrains|gnome\.Builder|vscodium|dev\.zed|neovim|GitKraken' <<< "$FLATPAK_APPS" && add programmer 5 "dev-flatpak"
+  grep -qiE 'blender|gimp|inkscape|kdenlive|obsproject|darktable|krita|Audacity' <<< "$FLATPAK_APPS" && add ricer 4 "креатив/медиа flatpak"
+fi
 
 # ──────────────────────────────────────────────
 # Поведенческий анализ: shell-конфиги и история команд
@@ -727,24 +823,74 @@ _view_cleanup() {
   tput rmcup 2>/dev/null
 }
 
-render_frame() {
+# ── Линуксоидный компас: векторы классов ──────────────────────
+#   x: − = новаторы (лево), + = традиции (право)
+#   y: + = контроль/DIY (верх), − = удобство/из-коробки (низ)
+declare -A VX=(
+  [devops]=-20 [programmer]=-10 [sysadmin]=50  [minimalist]=0
+  [old_hacker]=70 [ricer]=-30 [gamer]=-10 [anonymous]=0
+  [pentester]=10 [import_substituted]=50 [fresh_witness]=-90 [atomic]=-60
+)
+declare -A VY=(
+  [devops]=-20 [programmer]=30 [sysadmin]=40  [minimalist]=60
+  [old_hacker]=70 [ricer]=70 [gamer]=-60 [anonymous]=40
+  [pentester]=50 [import_substituted]=-10 [fresh_witness]=-10 [atomic]=-50
+)
+
+AGG_CX=0
+AGG_CY=0
+compute_compass() {
+  local key sumx=0 sumy=0 sumw=0 w
+  for key in "${!score[@]}"; do
+    w=${score[$key]}
+    (( w <= 0 )) && continue
+    sumx=$(( sumx + w * ${VX[$key]} ))
+    sumy=$(( sumy + w * ${VY[$key]} ))
+    sumw=$(( sumw + w ))
+  done
+  (( sumw == 0 )) && sumw=1
+  AGG_CX=$(( sumx / sumw ))
+  AGG_CY=$(( sumy / sumw ))
+}
+
+compass_quadrant() {   # CX CY → название квадранта
+  local cx=$1 cy=$2 h v
+  if   (( cx <= -15 )); then h=N
+  elif (( cx >=  15 )); then h=T
+  else h=C; fi
+  if   (( cy >=  15 )); then v=U
+  elif (( cy <= -15 )); then v=D
+  else v=C; fi
+  case "$h$v" in
+    NU) printf '%s' "Лаборатория — DIY-новатор (Arch/NixOS/tiling)" ;;
+    TU) printf '%s' "Цитадель Unix — всё руками, старая школа" ;;
+    ND) printf '%s' "Гладкое будущее — новое и из коробки (atomic/Bazzite)" ;;
+    TD) printf '%s' "Тёплая гавань — стабильно и удобно (Ubuntu/Mint)" ;;
+    CU) printf '%s' "Инженер-середняк — по взглядам центрист, но всё руками" ;;
+    CD) printf '%s' "Прагматик — посередине по взглядам, ценит удобство" ;;
+    NC) printf '%s' "Новатор-центрист — за свежее, баланс DIY и удобства" ;;
+    TC) printf '%s' "Традиционалист-центрист — проверенное, баланс DIY и удобства" ;;
+    *)  printf '%s' "Центрист — сбалансированный линуксоид" ;;
+  esac
+}
+
+# ── Общие части кадра ──────────────────────────────────────────
+render_header() {
+  printf '%s\n\n' "${BOLD}${CYAN}  🐧 $1${RESET}"
+}
+
+render_footer() {
+  printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
+  printf '%s' "${DIM}  ${BOLD}j/k${RESET}${DIM}·${BOLD}↑↓${RESET}${DIM} — выбор · ${BOLD}${CYAN}m${RESET}${DIM} — режим [${MODE_NAME}] · ${BOLD}g/G${RESET}${DIM} — край · ${BOLD}${YELLOW}q${RESET}${DIM} — выход${RESET}"
+}
+
+# ── Режим «Список» ─────────────────────────────────────────────
+render_list() {
   local sel=$1 i sk lbl p pad used l
-  tput cup 0 0 2>/dev/null
-  tput ed   2>/dev/null
+  render_header "Профиль архетипов"
 
-  # Шапка — та же, что в статическом выводе; остаётся на месте
-  printf '%s\n' "${BOLD}╔══════════════════════════════════════════╗${RESET}"
-  printf '%s\n' "${BOLD}║     Linux Psychological Profiler v4.0    ║${RESET}"
-  printf '%s\n' "${BOLD}╚══════════════════════════════════════════╝${RESET}"
-  printf '%s\n' "${DIM}  Дистрибутив : ${DISTRO}${RESET}"
-  printf '%s\n' "${DIM}  Ядро        : ${KERNEL}  ·  Init : ${INIT1}${RESET}"
-  printf '\n'
-
-  # Список классов статичен; меняется только зелёный маркер выделения
   for i in "${!sorted_keys[@]}"; do
-    sk=${sorted_keys[i]}
-    lbl=${LABEL[$sk]}
-    p=${norm_score[$sk]}
+    sk=${sorted_keys[i]}; lbl=${LABEL[$sk]}; p=${norm_score[$sk]}
     pad=$(( MAXLEN - ${#lbl} ))
     if (( i == sel )); then
       printf "${GREEN}${BOLD}▶ %s%*s  %3d%%  %s${RESET}\n" "$lbl" "$pad" "" "$p" "$(make_bar "$p")"
@@ -755,9 +901,7 @@ render_frame() {
 
   printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
 
-  # Нижняя панель обновляется под выбранный класс (высота фиксирована)
-  sk=${sorted_keys[sel]}
-  used=0
+  sk=${sorted_keys[sel]}; used=0
   printf "${BOLD}${GREEN}▶ %s — %d%%${RESET}\n" "${LABEL[$sk]}" "${norm_score[$sk]}"; used=$(( used + 1 ))
   wrap_into "$(describe "$sk" "${norm_score[$sk]}")" "$WRAP_W"
   for l in "${WRAPPED[@]}"; do printf "  %s\n" "$l"; used=$(( used + 1 )); done
@@ -767,8 +911,178 @@ render_frame() {
   for l in "${WRAPPED[@]}"; do printf "${DIM}  %s${RESET}\n" "$l"; used=$(( used + 1 )); done
   while (( used < DETAIL_H )); do printf '\n'; used=$(( used + 1 )); done
 
-  printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
-  printf '%s' "${DIM}  ${BOLD}↑/↓${RESET}${DIM} или ${BOLD}j/k${RESET}${DIM} — двигать маркер · ${BOLD}g/G${RESET}${DIM} — первый/последний · ${BOLD}${YELLOW}q${RESET}${DIM} — выход${RESET}"
+  render_footer
+}
+
+# ── Режим «Координаты» (линуксоидный компас) ───────────────────
+render_compass() {
+  local sel=$1 selkey=${sorted_keys[sel]}
+  render_header "Линуксоидный компас"
+
+  local GW=49 GH=15 cols rows
+  cols=$(tput cols 2>/dev/null || echo 80)
+  rows=$(tput lines 2>/dev/null || echo 24)
+  (( GW > cols - 4 ))  && GW=$(( cols - 4 ))
+  (( GW < 21 ))        && GW=21
+  (( GW % 2 == 0 ))    && GW=$(( GW - 1 ))
+  (( GH > rows - 14 )) && GH=$(( rows - 14 ))
+  (( GH < 7 ))         && GH=7
+  (( GH % 2 == 0 ))    && GH=$(( GH - 1 ))
+  local ccol=$(( (GW - 1) / 2 )) crow=$(( (GH - 1) / 2 ))
+
+  # Единственная точка — твой центр масс (общие взгляды пользователя)
+  local -A CELL=()
+  local ac=$(( (AGG_CX + 100) * (GW - 1) / 200 ))
+  local ar=$(( (100 - AGG_CY) * (GH - 1) / 200 ))
+  (( ac < 0 )) && ac=0; (( ac > GW - 1 )) && ac=$(( GW - 1 ))
+  (( ar < 0 )) && ar=0; (( ar > GH - 1 )) && ar=$(( GH - 1 ))
+  CELL["$ar,$ac"]="${CYAN}${BOLD}●${RESET}"
+
+  printf '   %s\n' "${BOLD}▲ КОНТРОЛЬ (всё руками)${RESET}"
+  local r c cell line
+  for (( r=0; r<GH; r++ )); do
+    line="   "
+    for (( c=0; c<GW; c++ )); do
+      cell=${CELL["$r,$c"]:-}
+      if [[ -z $cell ]]; then
+        if   (( r == crow && c == ccol )); then cell="${DIM}┼${RESET}"
+        elif (( r == crow ));              then cell="${DIM}─${RESET}"
+        elif (( c == ccol ));              then cell="${DIM}│${RESET}"
+        else cell=" "; fi
+      fi
+      line+="$cell"
+    done
+    printf '%s\n' "$line"
+  done
+  printf '   %s\n' "${BOLD}▼ УДОБСТВО (из коробки)${RESET}"
+  printf '   %s\n' "${DIM}◄ новаторы$(printf '%*s' $(( GW - 20 )) '')традиции ►${RESET}"
+
+  # Подписи знаков координат
+  local sx=$AGG_CX sy=$AGG_CY
+  [[ ${sx:0:1} != - ]] && sx="+$sx"
+  [[ ${sy:0:1} != - ]] && sy="+$sy"
+
+  printf '\n'
+  printf '%s\n' "  ${CYAN}${BOLD}●${RESET} ${BOLD}ты:${RESET} $(compass_quadrant "$AGG_CX" "$AGG_CY")"
+  printf '%s\n' "  ${DIM}   координаты:  новат↔трад ${sx}   ·   контроль↔удоб ${sy}${RESET}"
+
+  render_footer
+}
+
+# ── Режим «Забавная статистика» ────────────────────────────────
+STATS_OK=0
+TOTAL_CMDS=0; UNIQ_CMDS=0; TOP_CMD=""; TOP_CNT=0
+FF_COUNT=0; SUDO_COUNT=0; UPD_COUNT=0; RMRF_COUNT=0; TYPO_COUNT=0
+VIM_COUNT=0; NANO_COUNT=0; EMACS_COUNT=0; SPAN_SEC=0
+
+human_interval() {   # секунды → «раз в …»
+  local s=$1
+  if   (( s <= 0 ));     then printf '—'
+  elif (( s >= 86400 )); then printf 'раз в %d дн.'  $(( s / 86400 ))
+  elif (( s >= 3600 ));  then printf 'раз в %d ч.'   $(( s / 3600 ))
+  elif (( s >= 60 ));    then printf 'раз в %d мин.' $(( s / 60 ))
+  else                        printf 'раз в %d сек.' "$s"
+  fi
+}
+freq() {   # count → интервал по охвату истории
+  local c=$1
+  (( c <= 0 || SPAN_SEC <= 0 )) && { printf '—'; return; }
+  human_interval $(( SPAN_SEC / c ))
+}
+
+compute_stats() {
+  local raw ts tsmin tsmax topline
+  raw=$(
+    { [[ -r ~/.bash_history ]] && grep -av '^#' ~/.bash_history
+      [[ -r ~/.zsh_history  ]] && sed -E 's/^: [0-9]+:[0-9]+;//' ~/.zsh_history
+      [[ -r ~/.local/share/fish/fish_history ]] && sed -nE 's/^- cmd: //p' ~/.local/share/fish/fish_history
+    } 2>/dev/null
+  )
+  # первое слово команды, sudo/doas разворачиваем до реальной команды
+  CMD_LIST=$(awk '{c=$1; if(c=="sudo"||c=="doas")c=$2; print c}' <<< "$raw" | grep -vE '^[[:space:]]*$')
+  TOTAL_CMDS=$(grep -c . <<< "$CMD_LIST"); TOTAL_CMDS=${TOTAL_CMDS:-0}
+  (( TOTAL_CMDS == 0 )) && { STATS_OK=0; return; }
+  STATS_OK=1
+
+  UNIQ_CMDS=$(sort -u <<< "$CMD_LIST" | grep -c .)
+  topline=$(sort <<< "$CMD_LIST" | uniq -c | sort -rn | head -1)
+  TOP_CNT=$(awk '{print $1}' <<< "$topline")
+  TOP_CMD=$(awk '{print $2}' <<< "$topline")
+
+  FF_COUNT=$(grep -cxE 'fastfetch|neofetch|screenfetch|pfetch|hyfetch' <<< "$CMD_LIST")
+  SUDO_COUNT=$(awk '{print $1}' <<< "$raw" | grep -cxE 'sudo|doas')
+  UPD_COUNT=$(grep -ciE '(pacman[^|]*-S(yu|yyu|u)|(^|[; ])(yay|paru)([[:space:]]|$)|apt(-get)?[[:space:]]+(update|upgrade|full-upgrade)|dnf[[:space:]]+(update|upgrade)|zypper[[:space:]]+(up|dup|patch)|nixos-rebuild|emerge[^|]*(-u|world)|flatpak[[:space:]]+update|rpm-ostree[[:space:]]+upgrade|xbps-install[^|]*-Su)' <<< "$raw")
+  RMRF_COUNT=$(grep -ciE 'rm[[:space:]]+-[a-zA-Z]*[rf][a-zA-Z]*' <<< "$raw")
+  TYPO_COUNT=$(grep -cxE 'sl|gti|claer|grpe|exti|pythno|sudp|suod|cd\.\.\.?' <<< "$CMD_LIST")
+  VIM_COUNT=$(grep -cxE 'vim|nvim|vi' <<< "$CMD_LIST")
+  NANO_COUNT=$(grep -cxE 'nano' <<< "$CMD_LIST")
+  EMACS_COUNT=$(grep -cxE 'emacs|emacsclient' <<< "$CMD_LIST")
+
+  ts=$(
+    { [[ -r ~/.zsh_history  ]] && sed -nE 's/^: ([0-9]+):.*/\1/p' ~/.zsh_history
+      [[ -r ~/.bash_history ]] && grep -aoE '^#[0-9]{9,}' ~/.bash_history | tr -d '#'
+      [[ -r ~/.local/share/fish/fish_history ]] && sed -nE 's/^[[:space:]]*when: ([0-9]+).*/\1/p' ~/.local/share/fish/fish_history
+    } 2>/dev/null | sort -n
+  )
+  tsmin=$(grep -m1 . <<< "$ts"); tsmax=$(tail -1 <<< "$ts")
+  if [[ -n $tsmin && -n $tsmax ]] && (( tsmax > tsmin )); then
+    SPAN_SEC=$(( tsmax - tsmin ))
+  elif safe_gt "${INSTALL_EPOCH:-0}" 0; then
+    SPAN_SEC=$(( $(date +%s) - INSTALL_EPOCH ))
+  else
+    SPAN_SEC=0
+  fi
+}
+
+_ff_quip()   { if   (( FF_COUNT == 0 )); then printf 'ни разу, аскет';
+               elif (( FF_COUNT < 5 ));  then printf 'скромно';
+               elif (( FF_COUNT < 50 )); then printf 'любишь полюбоваться системой';
+               else printf 'это уже зависимость))'; fi; }
+_upd_quip()  { if   (( UPD_COUNT == 0 )); then printf 'ни разу — смело';
+               elif (( UPD_COUNT < 10 )); then printf 'по необходимости';
+               elif (( UPD_COUNT < 100 ));then printf 'держишь систему свежей';
+               else printf 'апдейт — это медитация'; fi; }
+_rmrf_quip() { if   (( RMRF_COUNT == 0 )); then printf 'аккуратно';
+               elif (( RMRF_COUNT < 5 ));  then printf 'бывает';
+               elif (( RMRF_COUNT < 30 )); then printf 'живёшь опасно';
+               else printf 'как ты ещё жив?'; fi; }
+_editor_win(){ if   (( VIM_COUNT > NANO_COUNT && VIM_COUNT > EMACS_COUNT )); then printf 'победил vim';
+               elif (( NANO_COUNT > VIM_COUNT && NANO_COUNT > EMACS_COUNT )); then printf 'победил nano';
+               elif (( EMACS_COUNT > VIM_COUNT && EMACS_COUNT > NANO_COUNT )); then printf 'победил emacs';
+               elif (( VIM_COUNT + NANO_COUNT + EMACS_COUNT == 0 )); then printf 'все мимо — GUI?';
+               else printf 'ничья'; fi; }
+
+render_stats() {
+  render_header "Забавная статистика"
+  if (( STATS_OK == 0 )); then
+    printf '%s\n' "  ${DIM}История команд пуста или недоступна.${RESET}"
+    printf '%s\n' "  ${DIM}Подсказка: включи ${BOLD}HISTTIMEFORMAT${RESET}${DIM} — и время будет точнее.${RESET}"
+    render_footer
+    return
+  fi
+  local span_d=$(( SPAN_SEC / 86400 ))
+  printf '%s\n' "  В истории ${BOLD}${TOTAL_CMDS}${RESET} команд, ${BOLD}${UNIQ_CMDS}${RESET} уникальных${DIM} (охват ~${span_d} дн.)${RESET}"
+  printf '\n'
+  printf '%s\n' "  Любимая команда: ${BOLD}${GREEN}${TOP_CMD}${RESET} — ${BOLD}${TOP_CNT}×${RESET} ${DIM}($(freq "$TOP_CNT"))${RESET}"
+  printf '%s\n' "  fastfetch/neofetch: ${BOLD}${FF_COUNT}×${RESET} ${DIM}($(freq "$FF_COUNT")) — $(_ff_quip)${RESET}"
+  printf '%s\n' "  Обновления: ${BOLD}${UPD_COUNT}×${RESET} ${DIM}($(freq "$UPD_COUNT")) — $(_upd_quip)${RESET}"
+  printf '%s\n' "  sudo/doas: ${BOLD}${SUDO_COUNT}×${RESET} ${DIM}($(freq "$SUDO_COUNT"))${RESET}"
+  printf '%s\n' "  rm -rf: ${BOLD}${RMRF_COUNT}×${RESET} ${DIM}— $(_rmrf_quip)${RESET}"
+  printf '%s\n' "  Опечаток поймано: ${BOLD}${TYPO_COUNT}${RESET}${DIM} (sl, gti, claer, cd..…)${RESET}"
+  printf '%s\n' "  Редактор-война: ${DIM}vim${RESET} ${VIM_COUNT} : ${DIM}nano${RESET} ${NANO_COUNT} : ${DIM}emacs${RESET} ${EMACS_COUNT}  ${DIM}→ $(_editor_win)${RESET}"
+  render_footer
+}
+
+# ── Диспетчер кадра ────────────────────────────────────────────
+render_frame() {
+  local sel=$1
+  tput cup 0 0 2>/dev/null
+  tput ed   2>/dev/null
+  case "$VIEW_MODE" in
+    compass) render_compass "$sel" ;;
+    stats)   render_stats ;;
+    *)       render_list "$sel" ;;
+  esac
 }
 
 # Глобальные параметры раскладки интерактивного вида
@@ -777,12 +1091,16 @@ WRAP_W=72
 DETAIL_H=0
 KERNEL=""
 INIT1=""
+VIEW_MODE="list"
+MODE_NAME="список"
 
 interactive_view() {
   local cols sk d c total l last sel=0
 
   KERNEL=$(uname -r 2>/dev/null || echo '?')
   INIT1=$(ps -p 1 -o comm= 2>/dev/null || echo '?')
+  compute_compass
+  compute_stats
 
   cols=$(tput cols 2>/dev/null || echo 80)
   WRAP_W=$(( cols - 4 ))
@@ -819,6 +1137,12 @@ interactive_view() {
       k|$'\x1b[A')  (( sel > 0 ))    && sel=$(( sel - 1 )) ;;
       g)            sel=0 ;;
       G)            sel=$last ;;
+      m|M)
+        case "$VIEW_MODE" in
+          list)    VIEW_MODE="compass"; MODE_NAME="компас" ;;
+          compass) VIEW_MODE="stats";   MODE_NAME="статистика" ;;
+          *)       VIEW_MODE="list";    MODE_NAME="список" ;;
+        esac ;;
     esac
   done
 
