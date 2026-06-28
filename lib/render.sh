@@ -123,7 +123,7 @@ render_header() {
 
 render_footer() {
   printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
-  printf '%s' "${DIM}  ${BOLD}j/k${RESET}${DIM}·${BOLD}↑↓${RESET}${DIM} — выбор · ${BOLD}${CYAN}m${RESET}${DIM} — режим [${MODE_NAME}] · ${BOLD}g/G${RESET}${DIM} — край · ${BOLD}${YELLOW}q${RESET}${DIM} — выход${RESET}"
+  printf '%s' "${DIM}  ${BOLD}j/k${RESET}${DIM}·${BOLD}↑↓${RESET}${DIM} — выбор · ${BOLD}${CYAN}m${RESET}${DIM} — режим [${MODE_NAME}] · ${BOLD}${YELLOW}q${RESET}${DIM} — выход${RESET}"
 }
 
 # ── Режим «Список» ─────────────────────────────────────────────
