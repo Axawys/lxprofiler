@@ -8,19 +8,16 @@
 
 ## ⚡ Быстрый старт
 
-Скачать и сразу запустить одной командой:
+Скачать, сделать исполняемым и запустить:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/axawys/lxprofile/main/script.sh)
+wget https://raw.githubusercontent.com/Axawys/lxprofiler/main/script.sh
+chmod +x script.sh
+./script.sh
 ```
 
-> Используется `bash <(curl ...)`, а не `curl | bash`: при обычном пайпе stdin
-> занят загрузкой, и интерактивный режим не включится. Process substitution
-> оставляет терминал на stdin — TUI работает как надо.
->
-> Замените `axawys/lxprofile` на свой `пользователь/репозиторий`, если форкаете.
 > Запуск чужих скриптов из сети — на ваш страх и риск; при желании сначала
-> просмотрите содержимое: `curl -fsSL <url> | less`.
+> просмотрите содержимое: `less script.sh`.
 
 ---
 
