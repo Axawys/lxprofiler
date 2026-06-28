@@ -8,6 +8,14 @@
 BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
 GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'
 
+# Значок пингвина показываем только в UTF-8 локали — иначе вместо 🐧 будут
+# «кракозябры». В не-UTF-8 окружении заголовки идут без эмодзи.
+if [[ "${LANG:-}${LC_ALL:-}${LC_CTYPE:-}" == *[Uu][Tt][Ff]* ]]; then
+  PENGUIN="🐧 "
+else
+  PENGUIN=""
+fi
+
 make_bar() {
   local p=$1 filled=$(( $1 / 5 )) i=0 b=""
   while (( i < filled )); do b+="█"; i=$(( i + 1 )); done
@@ -110,7 +118,7 @@ _view_cleanup() {
 
 # ── Общие части кадра ──────────────────────────────────────────
 render_header() {
-  printf '%s\n\n' "${BOLD}${CYAN}  🐧 $1${RESET}"
+  printf '%s\n\n' "${BOLD}${CYAN}  ${PENGUIN}$1${RESET}"
 }
 
 render_footer() {

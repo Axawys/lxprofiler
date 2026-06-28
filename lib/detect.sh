@@ -542,6 +542,14 @@ if has flatpak; then
   grep -qiE 'blender|gimp|inkscape|kdenlive|obsproject|darktable|krita|Audacity' <<< "$FLATPAK_APPS" && add ricer 4 "креатив/медиа flatpak"
 fi
 
+# ALT Tuner (org.altlinux.Tuner) — отечественная утилита настройки системы
+if [[ "${FLATPAK_APPS:-}" == *org.altlinux.Tuner* ]] \
+   || compgen -G "/var/lib/flatpak/exports/share/applications/org.altlinux.Tuner*" >/dev/null 2>&1 \
+   || compgen -G "${HOME:-}/.local/share/flatpak/exports/share/applications/org.altlinux.Tuner*" >/dev/null 2>&1 \
+   || [[ -e /usr/share/applications/org.altlinux.Tuner.desktop ]]; then
+  add import_substituted 10 "ALT Tuner"
+fi
+
 # ──────────────────────────────────────────────
 # Поведенческий анализ: shell-конфиги и история команд
 #   Отличаем тех, кто РЕАЛЬНО пользуется инструментом, от тех, у кого он

@@ -56,24 +56,10 @@ _remote_version() {
   git -C "$LXPROFILE_ROOT" show "origin/$branch:lib/version.sh" 2>/dev/null | _extract_version
 }
 
-# Проверяет наличие новой версии и при необходимости предлагает обновиться.
+# Предлагает обновиться до версии $1.
 # y → обновить и перезапуститься; n → больше не предлагать до ручного обновления.
-check_for_update() {
-  # Только в интерактивном терминале и только из git-установки
-  [[ -t 0 && -t 1 ]] || return 0
-  command -v git >/dev/null 2>&1 || return 0
-  git -C "$LXPROFILE_ROOT" rev-parse --git-dir >/dev/null 2>&1 || return 0
-
-  local remote_ver
-  remote_ver=$(_remote_version) || return 0
-  [[ -z $remote_ver ]] && return 0
-
-  # Новее ли версия в репозитории?
-  _version_gt "$remote_ver" "$LXPROFILE_VERSION" || return 0
-
-  # Пользователь ранее отказался — молчим до ручного обновления
-  [[ -e $LXPROFILE_DECLINED_FILE ]] && return 0
-
+_offer_update() {
+  local remote_ver=$1
   printf 'Доступна новая версия lxprofile: %s (у вас %s).\n' "$remote_ver" "$LXPROFILE_VERSION"
   printf 'Обновить сейчас? [y/N] '
   local ans=""
@@ -91,4 +77,41 @@ check_for_update() {
       printf 'Хорошо, больше не буду предлагать — пока не обновитесь вручную (lxprofile --update).\n'
       ;;
   esac
+}
+
+# Файл с результатом фоновой проверки и pid фонового процесса
+LXPROFILE_UPD_RESULT=""
+LXPROFILE_UPD_PID=""
+
+# Запускает проверку обновлений В ФОНЕ, чтобы не тормозить открытие утилиты.
+# Результат (номер новой версии) кладётся в файл, который читает finish_update_check.
+start_update_check() {
+  # Только в интерактивном терминале и только из git-установки
+  [[ -t 0 && -t 1 ]] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+  git -C "$LXPROFILE_ROOT" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  # Пользователь ранее отказался — молчим до ручного обновления
+  [[ -e $LXPROFILE_DECLINED_FILE ]] && return 0
+
+  LXPROFILE_UPD_RESULT=$(mktemp 2>/dev/null) || { LXPROFILE_UPD_RESULT=""; return 0; }
+  {
+    rv=$(_remote_version) || exit 0
+    [[ -z $rv ]] && exit 0
+    if _version_gt "$rv" "$LXPROFILE_VERSION"; then
+      printf '%s\n' "$rv" > "$LXPROFILE_UPD_RESULT"
+    fi
+  } >/dev/null 2>&1 &
+  LXPROFILE_UPD_PID=$!
+}
+
+# Дожидается фоновой проверки и, если вышла новая версия, предлагает обновиться.
+# Вызывается ПОСЛЕ закрытия интерактивного просмотра.
+finish_update_check() {
+  [[ -n $LXPROFILE_UPD_PID ]] || return 0
+  wait "$LXPROFILE_UPD_PID" 2>/dev/null
+  local remote_ver=""
+  [[ -r $LXPROFILE_UPD_RESULT ]] && remote_ver=$(<"$LXPROFILE_UPD_RESULT")
+  rm -f "$LXPROFILE_UPD_RESULT" 2>/dev/null
+  [[ -z $remote_ver ]] && return 0
+  _offer_update "$remote_ver"
 }
