@@ -19,6 +19,7 @@ LXPROFILE_ROOT="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 LXPROFILE_LIB="$LXPROFILE_ROOT/lib"
 
 source "$LXPROFILE_LIB/version.sh"
+source "$LXPROFILE_LIB/update.sh"
 
 # ──────────────────────────────────────────────
 # Подкоманды: --version / --help / --update
@@ -51,26 +52,6 @@ lxprofile — Linux Psychological Profiler
 EOF
 }
 
-do_update() {
-  if ! command -v git >/dev/null 2>&1; then
-    printf 'Для обновления нужен git, но он не найден.\n' >&2
-    return 1
-  fi
-  if ! git -C "$LXPROFILE_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-    printf 'Каталог установки не является git-репозиторием:\n  %s\n' "$LXPROFILE_ROOT" >&2
-    printf 'Переустановите утилиту через install.sh.\n' >&2
-    return 1
-  fi
-  printf 'Обновляю lxprofile в %s …\n' "$LXPROFILE_ROOT"
-  if ! git -C "$LXPROFILE_ROOT" pull --ff-only; then
-    printf 'Не удалось обновить (возможны локальные изменения).\n' >&2
-    return 1
-  fi
-  # Перечитываем версию после обновления
-  source "$LXPROFILE_LIB/version.sh"
-  printf 'Готово. Текущая версия: %s\n' "$LXPROFILE_VERSION"
-}
-
 case "${1:-}" in
   -v|--version) print_version; exit 0 ;;
   -h|--help)    print_help;    exit 0 ;;
@@ -82,6 +63,11 @@ case "${1:-}" in
     exit 1
     ;;
 esac
+
+# ──────────────────────────────────────────────
+# Проверка обновлений (только при обычном запуске в терминале)
+# ──────────────────────────────────────────────
+check_for_update
 
 # ──────────────────────────────────────────────
 # Движок: данные → утилиты → анализ → отрисовка
