@@ -209,7 +209,9 @@ interactive_view() {
   last=$(( ${#sorted_keys[@]} - 1 ))
 
   tput smcup 2>/dev/null; tput civis 2>/dev/null
-  trap '_view_cleanup' EXIT INT TERM
+  # На Ctrl+C/SIGTERM восстанавливаем терминал и выходим аккуратно
+  trap '_view_cleanup' EXIT
+  trap '_view_cleanup; exit 130' INT TERM
 
   while true; do
     render_frame "$sel"
