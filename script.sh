@@ -694,6 +694,48 @@ if [[ -n $BEHAVIOR ]]; then
 fi
 
 # ──────────────────────────────────────────────
+# Алиасы для fetch-утилит (fastfetch и аналоги)
+#   Многие заводят `alias ff='fastfetch --config ...'`. Считаем такой алиас
+#   равнозначным fastfetch (флаги/конфиги игнорируем — это просто fastfetch),
+#   а само наличие красивого fetch-алиаса — лёгкий сигнал райсинга.
+# ──────────────────────────────────────────────
+
+FETCH_RE='fastfetch|neofetch|screenfetch|pfetch|hyfetch|nerdfetch|macchina|cpufetch'
+FF_MATCH_RE="$FETCH_RE"
+FF_ALIAS_LABEL=""
+declare -a FF_ALIASES=()
+
+_rc_for_alias=$(
+  for f in "${HOME:-}/.bashrc" "${HOME:-}/.bash_aliases" "${HOME:-}/.zshrc" \
+           "${HOME:-}/.zsh_aliases" "${HOME:-}/.aliases" \
+           "${HOME:-}/.config/fish/config.fish"; do
+    [[ -r $f ]] && cat "$f" 2>/dev/null
+  done
+)
+# alias name=...fetch  /  alias name 'fetch' (fish)
+while IFS= read -r _an; do
+  [[ -n $_an ]] && FF_ALIASES+=("$_an")
+done < <(
+  grep -hoiE "alias[[:space:]]+[A-Za-z0-9_.-]+[[:space:]]*=?[[:space:]]*['\"]?(${FETCH_RE})" <<< "$_rc_for_alias" \
+    | sed -E "s/^[Aa][Ll][Ii][Aa][Ss][[:space:]]+([A-Za-z0-9_.-]+).*/\1/"
+)
+# однострочные функции: name() { ... fastfetch
+while IFS= read -r _an; do
+  [[ -n $_an ]] && FF_ALIASES+=("$_an")
+done < <(
+  grep -hoiE "[A-Za-z0-9_.-]+[[:space:]]*\(\)[[:space:]]*\{[^}]*(${FETCH_RE})" <<< "$_rc_for_alias" \
+    | sed -E "s/^([A-Za-z0-9_.-]+).*/\1/"
+)
+
+if (( ${#FF_ALIASES[@]} > 0 )); then
+  add ricer 4 "fetch-алиас (${FF_ALIASES[0]})"
+  FF_ALIAS_LABEL=" +${FF_ALIASES[0]}"
+  for _a in "${FF_ALIASES[@]}"; do
+    FF_MATCH_RE+="|$(printf '%s' "$_a" | sed 's/\./\\./g')"
+  done
+fi
+
+# ──────────────────────────────────────────────
 # Нормализация и сортировка
 # ──────────────────────────────────────────────
 
@@ -973,7 +1015,7 @@ render_compass() {
 STATS_OK=0
 TOTAL_CMDS=0; UNIQ_CMDS=0; TOP_CMD=""; TOP_CNT=0
 FF_COUNT=0; SUDO_COUNT=0; UPD_COUNT=0; RMRF_COUNT=0; TYPO_COUNT=0
-VIM_COUNT=0; NANO_COUNT=0; EMACS_COUNT=0; SPAN_SEC=0
+VIM_COUNT=0; NVIM_COUNT=0; NANO_COUNT=0; EMACS_COUNT=0; MICRO_COUNT=0; SPAN_SEC=0
 
 human_interval() {   # секунды → «раз в …»
   local s=$1
@@ -1009,14 +1051,16 @@ compute_stats() {
   TOP_CNT=$(awk '{print $1}' <<< "$topline")
   TOP_CMD=$(awk '{print $2}' <<< "$topline")
 
-  FF_COUNT=$(grep -cxE 'fastfetch|neofetch|screenfetch|pfetch|hyfetch' <<< "$CMD_LIST")
+  FF_COUNT=$(grep -cxE "${FF_MATCH_RE:-fastfetch|neofetch|screenfetch|pfetch|hyfetch}" <<< "$CMD_LIST")
   SUDO_COUNT=$(awk '{print $1}' <<< "$raw" | grep -cxE 'sudo|doas')
   UPD_COUNT=$(grep -ciE '(pacman[^|]*-S(yu|yyu|u)|(^|[; ])(yay|paru)([[:space:]]|$)|apt(-get)?[[:space:]]+(update|upgrade|full-upgrade)|dnf[[:space:]]+(update|upgrade)|zypper[[:space:]]+(up|dup|patch)|nixos-rebuild|emerge[^|]*(-u|world)|flatpak[[:space:]]+update|rpm-ostree[[:space:]]+upgrade|xbps-install[^|]*-Su)' <<< "$raw")
   RMRF_COUNT=$(grep -ciE 'rm[[:space:]]+-[a-zA-Z]*[rf][a-zA-Z]*' <<< "$raw")
   TYPO_COUNT=$(grep -cxE 'sl|gti|claer|grpe|exti|pythno|sudp|suod|cd\.\.\.?' <<< "$CMD_LIST")
-  VIM_COUNT=$(grep -cxE 'vim|nvim|vi' <<< "$CMD_LIST")
+  VIM_COUNT=$(grep -cxE 'vim|vi' <<< "$CMD_LIST")
+  NVIM_COUNT=$(grep -cxE 'nvim' <<< "$CMD_LIST")
   NANO_COUNT=$(grep -cxE 'nano' <<< "$CMD_LIST")
   EMACS_COUNT=$(grep -cxE 'emacs|emacsclient' <<< "$CMD_LIST")
+  MICRO_COUNT=$(grep -cxE 'micro' <<< "$CMD_LIST")
 
   ts=$(
     { [[ -r ~/.zsh_history  ]] && sed -nE 's/^: ([0-9]+):.*/\1/p' ~/.zsh_history
@@ -1034,23 +1078,53 @@ compute_stats() {
   fi
 }
 
-_ff_quip()   { if   (( FF_COUNT == 0 )); then printf 'ни разу, аскет';
-               elif (( FF_COUNT < 5 ));  then printf 'скромно';
-               elif (( FF_COUNT < 50 )); then printf 'любишь полюбоваться системой';
+# Интервал между вызовами в секундах (-1 если не определить)
+_ivl() { local c=$1; (( c <= 0 || SPAN_SEC <= 0 )) && { echo -1; return; }; echo $(( SPAN_SEC / c )); }
+
+_ff_quip()   { (( FF_COUNT == 0 )) && { printf 'ни разу, аскет'; return; }
+               local i; i=$(_ivl "$FF_COUNT")
+               if   (( i < 0 ));        then printf 'частоту не определить';
+               elif (( i >= 2592000 )); then printf 'очень редко';
+               elif (( i >= 604800 ));  then printf 'иногда любуешься системой';
+               elif (( i >= 86400 ));   then printf 'почти ежедневный ритуал';
+               elif (( i >= 3600 ));    then printf 'по нескольку раз в день';
                else printf 'это уже зависимость))'; fi; }
-_upd_quip()  { if   (( UPD_COUNT == 0 )); then printf 'ни разу — смело';
-               elif (( UPD_COUNT < 10 )); then printf 'по необходимости';
-               elif (( UPD_COUNT < 100 ));then printf 'держишь систему свежей';
+_upd_quip()  { (( UPD_COUNT == 0 )) && { printf 'ни разу — смело'; return; }
+               local i; i=$(_ivl "$UPD_COUNT")
+               if   (( i < 0 ));        then printf 'частоту не определить';
+               elif (( i >= 2592000 )); then printf 'обновляешься редко — стабильность важнее';
+               elif (( i >= 604800 ));  then printf 'апдейт по выходным';
+               elif (( i >= 86400 ));   then printf 'держишь систему свежей';
                else printf 'апдейт — это медитация'; fi; }
-_rmrf_quip() { if   (( RMRF_COUNT == 0 )); then printf 'аккуратно';
-               elif (( RMRF_COUNT < 5 ));  then printf 'бывает';
-               elif (( RMRF_COUNT < 30 )); then printf 'живёшь опасно';
+_rmrf_quip() { (( RMRF_COUNT == 0 )) && { printf 'аккуратно'; return; }
+               local i; i=$(_ivl "$RMRF_COUNT")
+               if   (( i < 0 ));        then printf 'частоту не определить';
+               elif (( i >= 2592000 )); then printf 'редко, но метко';
+               elif (( i >= 604800 ));  then printf 'бывает';
+               elif (( i >= 86400 ));   then printf 'живёшь опасно';
                else printf 'как ты ещё жив?'; fi; }
-_editor_win(){ if   (( VIM_COUNT > NANO_COUNT && VIM_COUNT > EMACS_COUNT )); then printf 'победил vim';
-               elif (( NANO_COUNT > VIM_COUNT && NANO_COUNT > EMACS_COUNT )); then printf 'победил nano';
-               elif (( EMACS_COUNT > VIM_COUNT && EMACS_COUNT > NANO_COUNT )); then printf 'победил emacs';
-               elif (( VIM_COUNT + NANO_COUNT + EMACS_COUNT == 0 )); then printf 'все мимо — GUI?';
-               else printf 'ничья'; fi; }
+_editor_win(){
+  local names=(vim nvim nano emacs micro)
+  local counts=("$VIM_COUNT" "$NVIM_COUNT" "$NANO_COUNT" "$EMACS_COUNT" "$MICRO_COUNT")
+  local i total=0 bestn=-1 ties=0 best=""
+  for i in "${!counts[@]}"; do total=$(( total + counts[i] )); (( counts[i] > bestn )) && bestn=${counts[i]}; done
+  (( total == 0 )) && { printf 'все мимо — GUI?'; return; }
+  for i in "${!counts[@]}"; do (( counts[i] == bestn )) && { ties=$(( ties + 1 )); best=${names[i]}; }; done
+  (( ties > 1 )) && { printf 'ничья'; return; }
+  printf 'победил %s' "$best"
+}
+_top_quip()  { local i; i=$(_ivl "$TOP_CNT")
+               if   (( i < 0 ));      then printf 'частоту не определить';
+               elif (( i >= 86400 )); then printf 'заходит нечасто';
+               elif (( i >= 3600 ));  then printf 'крепкая привычка';
+               elif (( i >= 600 ));   then printf 'мышечная память';
+               else printf 'набита вслепую'; fi; }
+_sudo_quip() { (( SUDO_COUNT == 0 )) && { printf 'живёшь без рута'; return; }
+               local i; i=$(_ivl "$SUDO_COUNT")
+               if   (( i < 0 ));      then printf 'частоту не определить';
+               elif (( i >= 86400 )); then printf 'рут по праздникам';
+               elif (( i >= 3600 ));  then printf 'уверенно у руля';
+               else printf 'практически root'; fi; }
 
 render_stats() {
   render_header "Забавная статистика"
@@ -1063,13 +1137,13 @@ render_stats() {
   local span_d=$(( SPAN_SEC / 86400 ))
   printf '%s\n' "  В истории ${BOLD}${TOTAL_CMDS}${RESET} команд, ${BOLD}${UNIQ_CMDS}${RESET} уникальных${DIM} (охват ~${span_d} дн.)${RESET}"
   printf '\n'
-  printf '%s\n' "  Любимая команда: ${BOLD}${GREEN}${TOP_CMD}${RESET} — ${BOLD}${TOP_CNT}×${RESET} ${DIM}($(freq "$TOP_CNT"))${RESET}"
-  printf '%s\n' "  fastfetch/neofetch: ${BOLD}${FF_COUNT}×${RESET} ${DIM}($(freq "$FF_COUNT")) — $(_ff_quip)${RESET}"
+  printf '%s\n' "  Любимая команда: ${BOLD}${GREEN}${TOP_CMD}${RESET} — ${BOLD}${TOP_CNT}×${RESET} ${DIM}($(freq "$TOP_CNT")) — $(_top_quip)${RESET}"
+  printf '%s\n' "  fastfetch/neofetch${FF_ALIAS_LABEL}: ${BOLD}${FF_COUNT}×${RESET} ${DIM}($(freq "$FF_COUNT")) — $(_ff_quip)${RESET}"
   printf '%s\n' "  Обновления: ${BOLD}${UPD_COUNT}×${RESET} ${DIM}($(freq "$UPD_COUNT")) — $(_upd_quip)${RESET}"
-  printf '%s\n' "  sudo/doas: ${BOLD}${SUDO_COUNT}×${RESET} ${DIM}($(freq "$SUDO_COUNT"))${RESET}"
+  printf '%s\n' "  sudo/doas: ${BOLD}${SUDO_COUNT}×${RESET} ${DIM}($(freq "$SUDO_COUNT")) — $(_sudo_quip)${RESET}"
   printf '%s\n' "  rm -rf: ${BOLD}${RMRF_COUNT}×${RESET} ${DIM}— $(_rmrf_quip)${RESET}"
   printf '%s\n' "  Опечаток поймано: ${BOLD}${TYPO_COUNT}${RESET}${DIM} (sl, gti, claer, cd..…)${RESET}"
-  printf '%s\n' "  Редактор-война: ${DIM}vim${RESET} ${VIM_COUNT} : ${DIM}nano${RESET} ${NANO_COUNT} : ${DIM}emacs${RESET} ${EMACS_COUNT}  ${DIM}→ $(_editor_win)${RESET}"
+  printf '%s\n' "  Редактор-война: ${DIM}vim${RESET} ${VIM_COUNT} : ${DIM}nvim${RESET} ${NVIM_COUNT} : ${DIM}nano${RESET} ${NANO_COUNT} : ${DIM}emacs${RESET} ${EMACS_COUNT} : ${DIM}micro${RESET} ${MICRO_COUNT}  ${DIM}→ $(_editor_win)${RESET}"
   render_footer
 }
 
