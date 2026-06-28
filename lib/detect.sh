@@ -101,6 +101,12 @@ case "$DESKTOP" in
   *)                   : ;;
 esac
 
+# niri может быть установлен, но не запущен в текущей сессии — всё равно сигнал
+if [[ "$DESKTOP" != *niri* ]] && has niri; then
+  add import_substituted 10 "niri установлен (отеч. разработка)"
+  add fresh_witness 6 "скроллируемый WM на Wayland"
+fi
+
 # Если ни DE, ни WM не определились — вероятно, голая консоль/сервер
 if [[ "$DESKTOP" == "||" ]]; then
   add old_hacker 6 "без графического окружения"

@@ -104,6 +104,8 @@ read_key() {
 _view_cleanup() {
   tput cnorm 2>/dev/null
   tput rmcup 2>/dev/null
+  # Чистим терминал после выхода из интерактивного просмотра
+  tput clear 2>/dev/null || clear 2>/dev/null
 }
 
 # ── Общие части кадра ──────────────────────────────────────────
@@ -221,12 +223,4 @@ interactive_view() {
 
   _view_cleanup
   trap - EXIT INT TERM
-
-  # Оповещение о выходе
-  local W=${sorted_keys[0]}
-  echo
-  echo "${BOLD}${GREEN}▶ Твой профиль: ${LABEL[$W]}${RESET}"
-  echo "${DIM}  $(describe "$W" "${norm_score[$W]}")${RESET}"
-  echo "${DIM}  Просмотр закрыт по «q». До встречи! 🐧${RESET}"
-  echo
 }

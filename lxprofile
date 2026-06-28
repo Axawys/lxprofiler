@@ -40,11 +40,11 @@ print_help() {
 lxprofile — Linux Psychological Profiler
 
 Использование:
-  lxprofile             запустить профайлер (интерактивно в терминале,
-                        статично — в пайпе)
-  lxprofile --update    обновить lxprofile с GitHub
-  lxprofile --version   показать версию
-  lxprofile --help      показать эту справку
+  lxprofile               запустить профайлер (интерактивно в терминале,
+                          статично — в пайпе)
+  lxprofile -u, --update  обновить lxprofile с GitHub
+  lxprofile -v, --version показать версию
+  lxprofile -h, --help    показать эту справку
 
 Управление в интерактивном режиме:
   ↑/k ↓/j — выбор · g/G — край · m — режим · q — выход
@@ -74,7 +74,7 @@ do_update() {
 case "${1:-}" in
   -v|--version) print_version; exit 0 ;;
   -h|--help)    print_help;    exit 0 ;;
-  --update)     do_update;     exit $? ;;
+  -u|--update)  do_update;     exit $? ;;
   "")           : ;;  # без аргументов — запускаем профайлер
   *)
     printf 'Неизвестный аргумент: %s\n\n' "$1" >&2
