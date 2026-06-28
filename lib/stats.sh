@@ -6,6 +6,7 @@ STATS_OK=0
 TOTAL_CMDS=0; UNIQ_CMDS=0; TOP_CMD=""; TOP_CNT=0
 FF_COUNT=0; SUDO_COUNT=0; UPD_COUNT=0; RMRF_COUNT=0; TYPO_COUNT=0
 VIM_COUNT=0; NVIM_COUNT=0; NANO_COUNT=0; EMACS_COUNT=0; MICRO_COUNT=0; SPAN_SEC=0
+HIST_DEDUP=0
 
 human_interval() {   # секунды → «раз в …»
   local s=$1
@@ -43,7 +44,7 @@ compute_stats() {
 
   FF_COUNT=$(grep -cxE "${FF_MATCH_RE:-fastfetch|neofetch|screenfetch|pfetch|hyfetch}" <<< "$CMD_LIST")
   SUDO_COUNT=$(awk '{print $1}' <<< "$raw" | grep -cxE 'sudo|doas')
-  UPD_COUNT=$(grep -ciE '(pacman[^|]*-S(yu|yyu|u)|(^|[; ])(yay|paru)([[:space:]]|$)|apt(-get)?[[:space:]]+(update|upgrade|full-upgrade)|dnf[[:space:]]+(update|upgrade)|zypper[[:space:]]+(up|dup|patch)|nixos-rebuild|emerge[^|]*(-u|world)|flatpak[[:space:]]+update|rpm-ostree[[:space:]]+upgrade|xbps-install[^|]*-Su)' <<< "$raw")
+  UPD_COUNT=$(grep -ciE '(pacman[^|]*-S(yu|yyu|u)|(^|[; ])(yay|paru)([[:space:]]|$)|apt(-get)?[[:space:]]+(update|upgrade|full-upgrade)|dnf[[:space:]]+(update|upgrade)|zypper[[:space:]]+(up|dup|patch)|nixos-rebuild|cl-update|eix-sync|emerge[^|]*(--sync|-u|world)|flatpak[[:space:]]+update|rpm-ostree[[:space:]]+upgrade|xbps-install[^|]*-Su)' <<< "$raw")
   RMRF_COUNT=$(grep -ciE 'rm[[:space:]]+-[a-zA-Z]*[rf][a-zA-Z]*' <<< "$raw")
   TYPO_COUNT=$(grep -cxE 'sl|gti|claer|grpe|exti|pythno|sudp|suod|cd\.\.\.?' <<< "$CMD_LIST")
   VIM_COUNT=$(grep -cxE 'vim|vi' <<< "$CMD_LIST")
@@ -51,6 +52,17 @@ compute_stats() {
   NANO_COUNT=$(grep -cxE 'nano' <<< "$CMD_LIST")
   EMACS_COUNT=$(grep -cxE 'emacs|emacsclient' <<< "$CMD_LIST")
   MICRO_COUNT=$(grep -cxE 'micro' <<< "$CMD_LIST")
+
+  # Дедупликация истории искажает счётчики по вхождениям (повторы не сохраняются).
+  # Ловим типовые настройки bash (HISTCONTROL) и zsh (HIST_IGNORE*_DUPS и т.п.).
+  HIST_DEDUP=0
+  for _hf in "${HOME:-}/.bashrc" "${HOME:-}/.bash_profile" "${HOME:-}/.profile" \
+             "${HOME:-}/.zshrc" "${HOME:-}/.zprofile" "${HOME:-}/.zshenv"; do
+    [[ -r $_hf ]] || continue
+    if grep -qiE 'HISTCONTROL=[^#]*(erasedups|ignoredups|ignoreboth)|(setopt[^#]*)?hist_ignore(_all)?_dups|hist_save_no_dups|hist_expire_dups(_first)?' "$_hf" 2>/dev/null; then
+      HIST_DEDUP=1; break
+    fi
+  done
 
   ts=$(
     { [[ -r ~/.zsh_history  ]] && sed -nE 's/^: ([0-9]+):.*/\1/p' ~/.zsh_history
@@ -134,5 +146,8 @@ render_stats() {
   printf '%s\n' "  rm -rf: ${BOLD}${RMRF_COUNT}×${RESET} ${DIM}— $(_rmrf_quip)${RESET}"
   printf '%s\n' "  Опечаток поймано: ${BOLD}${TYPO_COUNT}${RESET}${DIM} (sl, gti, claer, cd..…)${RESET}"
   printf '%s\n' "  Редактор-война: ${DIM}vim${RESET} ${VIM_COUNT} : ${DIM}nvim${RESET} ${NVIM_COUNT} : ${DIM}nano${RESET} ${NANO_COUNT} : ${DIM}emacs${RESET} ${EMACS_COUNT} : ${DIM}micro${RESET} ${MICRO_COUNT}  ${DIM}→ $(_editor_win)${RESET}"
+  if (( HIST_DEDUP )); then
+    printf '%s\n' "  ${DIM}Прим.: в шелле включена дедупликация истории — повторы не сохраняются, счётчики занижены.${RESET}"
+  fi
   render_footer
 }
