@@ -307,13 +307,13 @@ interactive_view() {
     render_frame "$sel"
     read_key
     case "$REPLY_KEY" in
-      q|Q)          break ;;
-      j|$'\x1b[B')  (( sel < last )) && sel=$(( sel + 1 )) ;;
-      k|$'\x1b[A')  (( sel > 0 ))    && sel=$(( sel - 1 )) ;;
-      g)            sel=0 ;;
-      G)            sel=$last ;;
-      m|M|l|$'\x1b[C')  cycle_mode 1 ;;   # → / l — следующий режим
-      h|$'\x1b[D')      cycle_mode -1 ;;  # ← / h — предыдущий режим
+      q|Q|й|Й)                  break ;;
+      j|о|$'\x1b[B')            (( sel < last )) && sel=$(( sel + 1 )) ;;
+      k|л|$'\x1b[A')            (( sel > 0 ))    && sel=$(( sel - 1 )) ;;
+      g|п)                      sel=0 ;;
+      G|П)                      sel=$last ;;
+      m|M|ь|Ь|l|д|$'\x1b[C')    cycle_mode 1 ;;   # → / l — следующий режим
+      h|р|$'\x1b[D')            cycle_mode -1 ;;  # ← / h — предыдущий режим
     esac
   done
 
