@@ -123,7 +123,7 @@ render_header() {
 
 render_footer() {
   printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
-  printf '%s' "${DIM}  ${BOLD}j/k${RESET}${DIM}·${BOLD}↑↓${RESET}${DIM} — выбор · ${BOLD}${CYAN}m${RESET}${DIM} — режим [${MODE_NAME}] · ${BOLD}${YELLOW}q${RESET}${DIM} — выход${RESET}"
+  printf '%s' "${DIM}  ${BOLD}↑↓${RESET}${DIM} — листать · ${BOLD}${CYAN}←→${RESET}${DIM} — режим [${MODE_NAME}] · ${BOLD}${YELLOW}q${RESET}${DIM} — выход${RESET}"
 }
 
 # ── Режим «Список» ─────────────────────────────────────────────
@@ -233,8 +233,8 @@ interactive_view() {
       k|$'\x1b[A')  (( sel > 0 ))    && sel=$(( sel - 1 )) ;;
       g)            sel=0 ;;
       G)            sel=$last ;;
-      m|M|l)        cycle_mode 1 ;;
-      h)            cycle_mode -1 ;;
+      m|M|l|$'\x1b[C')  cycle_mode 1 ;;   # → / l — следующий режим
+      h|$'\x1b[D')      cycle_mode -1 ;;  # ← / h — предыдущий режим
     esac
   done
 
