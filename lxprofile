@@ -161,8 +161,10 @@ source "$LXPROFILE_LIB/render.sh"
 # ──────────────────────────────────────────────
 # Точка входа
 # В настоящем терминале — интерактивный режим; для пайпа — статическая сводка.
+# tput не обязателен: при его отсутствии render.sh использует ANSI-escape
+# (важно для Termux без пакета ncurses). Исключаем только не-TTY и TERM=dumb.
 # ──────────────────────────────────────────────
-if [[ -t 0 && -t 1 ]] && has tput; then
+if [[ -t 0 && -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
   interactive_view
   # interactive_view снимает свои trap'ы — возвращаем обработчик прерывания
   trap _interrupt INT TERM

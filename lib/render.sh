@@ -16,6 +16,38 @@ else
   PENGUIN=""
 fi
 
+# ──────────────────────────────────────────────
+# Управление терминалом: используем tput, а если его нет или TERM нерабочий —
+# ANSI-escape. Это даёт интерактивный режим без пакета ncurses (напр. на Termux),
+# не меняя поведения там, где tput есть.
+# ──────────────────────────────────────────────
+_HAVE_TPUT=0
+if command -v tput >/dev/null 2>&1 && tput cup 0 0 >/dev/null 2>&1; then
+  _HAVE_TPUT=1
+fi
+
+t_cols() {
+  local c=""
+  (( _HAVE_TPUT )) && c=$(tput cols 2>/dev/null)
+  [[ -z $c ]] && c=$(stty size 2>/dev/null | awk '{print $2}')
+  [[ -z $c ]] && c=${COLUMNS:-80}
+  printf '%s' "$c"
+}
+t_lines() {
+  local l=""
+  (( _HAVE_TPUT )) && l=$(tput lines 2>/dev/null)
+  [[ -z $l ]] && l=$(stty size 2>/dev/null | awk '{print $1}')
+  [[ -z $l ]] && l=${LINES:-24}
+  printf '%s' "$l"
+}
+t_smcup() { (( _HAVE_TPUT )) && { tput smcup 2>/dev/null; return; }; printf '\033[?1049h'; }
+t_rmcup() { (( _HAVE_TPUT )) && { tput rmcup 2>/dev/null; return; }; printf '\033[?1049l'; }
+t_civis() { (( _HAVE_TPUT )) && { tput civis 2>/dev/null; return; }; printf '\033[?25l'; }
+t_cnorm() { (( _HAVE_TPUT )) && { tput cnorm 2>/dev/null; return; }; printf '\033[?25h'; }
+t_home()  { (( _HAVE_TPUT )) && { tput cup 0 0 2>/dev/null; return; }; printf '\033[H'; }
+t_ed()    { (( _HAVE_TPUT )) && { tput ed   2>/dev/null; return; }; printf '\033[J'; }
+t_clear() { (( _HAVE_TPUT )) && { tput clear 2>/dev/null; return; }; printf '\033[2J\033[3J\033[H'; }
+
 # Ширина полоски заполненности. По умолчанию 20 (как и раньше); на узких
 # терминалах (Termux) interactive_view уменьшает её, не трогая прочие системы.
 BAR_W=20
@@ -139,10 +171,10 @@ read_key() {
 }
 
 _view_cleanup() {
-  tput cnorm 2>/dev/null
-  tput rmcup 2>/dev/null
+  t_cnorm
+  t_rmcup
   # Чистим терминал после выхода из интерактивного просмотра
-  tput clear 2>/dev/null || clear 2>/dev/null
+  t_clear
 }
 
 # ── Общие части кадра ──────────────────────────────────────────
@@ -197,8 +229,8 @@ render_list() {
 # ── Диспетчер кадра ────────────────────────────────────────────
 render_frame() {
   local sel=$1
-  tput cup 0 0 2>/dev/null
-  tput ed   2>/dev/null
+  t_home
+  t_ed
   case "$VIEW_MODE" in
     compass) render_compass "$sel" ;;
     stats)   render_stats ;;
@@ -234,7 +266,7 @@ interactive_view() {
   compute_compass
   compute_stats
 
-  cols=$(tput cols 2>/dev/null || echo 80)
+  cols=$(t_cols)
   WRAP_W=$(( cols - 4 ))
   (( WRAP_W > 76 )) && WRAP_W=76
   (( WRAP_W < 30 )) && WRAP_W=30
@@ -266,7 +298,7 @@ interactive_view() {
 
   last=$(( ${#sorted_keys[@]} - 1 ))
 
-  tput smcup 2>/dev/null; tput civis 2>/dev/null
+  t_smcup; t_civis
   # На Ctrl+C/SIGTERM восстанавливаем терминал и выходим аккуратно
   trap '_view_cleanup' EXIT
   trap '_view_cleanup; exit 130' INT TERM

@@ -62,8 +62,8 @@ render_compass() {
   render_header "Линуксоидный компас"
 
   local GW=49 GH=15 cols rows
-  cols=$(tput cols 2>/dev/null || echo 80)
-  rows=$(tput lines 2>/dev/null || echo 24)
+  cols=$(t_cols)
+  rows=$(t_lines)
   (( GW > cols - 4 ))  && GW=$(( cols - 4 ))
   (( GW < 21 ))        && GW=21
   (( GW % 2 == 0 ))    && GW=$(( GW - 1 ))
