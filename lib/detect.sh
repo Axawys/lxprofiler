@@ -357,6 +357,13 @@ if has python3 || has python; then
   fi
 fi
 
+# Java: один лишь рантайм (java) часто приходит зависимостью; засчитываем при
+# следах разработки — JDK (javac), сборка (Maven/Gradle) или менеджеры версий.
+if has javac || has mvn || has gradle || has jenv \
+   || [[ -d "${HOME:-}/.m2" || -d "${HOME:-}/.gradle" || -d "${HOME:-}/.sdkman" ]]; then
+  add programmer 3 "Java (JDK/сборка)"; dev_count=$(( dev_count + 1 ))
+fi
+
 # Пользовательские тулчейны и менеджеры версий — явный признак разработчика
 [[ -d "${HOME:-}/.cargo"  ]] && { add programmer 5 "Cargo"; add fresh_witness 2 "Rust toolchain"; }
 [[ -d "${HOME:-}/.rustup" ]] && add programmer 2 "rustup"
