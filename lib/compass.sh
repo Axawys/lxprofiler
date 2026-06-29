@@ -8,11 +8,13 @@ declare -A VX=(
   [devops]=-20 [programmer]=-10 [sysadmin]=50  [minimalist]=0
   [old_hacker]=70 [ricer]=-30 [gamer]=-10 [anonymous]=0
   [pentester]=10 [import_substituted]=50 [fresh_witness]=-90 [atomic]=-60
+  [creative]=-25
 )
 declare -A VY=(
   [devops]=-20 [programmer]=30 [sysadmin]=40  [minimalist]=60
   [old_hacker]=70 [ricer]=70 [gamer]=-60 [anonymous]=40
   [pentester]=50 [import_substituted]=-10 [fresh_witness]=-10 [atomic]=-50
+  [creative]=-15
 )
 
 AGG_CX=0
@@ -20,6 +22,8 @@ AGG_CY=0
 compute_compass() {
   local key sumx=0 sumy=0 sumw=0 w
   for key in "${!score[@]}"; do
+    # Скрытые мета-классы не имеют координат — пропускаем
+    [[ -z "${VX[$key]:-}" ]] && continue
     w=${score[$key]}
     (( w <= 0 )) && continue
     sumx=$(( sumx + w * ${VX[$key]} ))
@@ -54,7 +58,7 @@ compass_quadrant() {   # CX CY → название квадранта
 
 # ── Режим «Координаты» (линуксоидный компас) ───────────────────
 render_compass() {
-  local sel=$1 selkey=${sorted_keys[sel]}
+  local sel=$1
   render_header "Линуксоидный компас"
 
   local GW=49 GH=15 cols rows
@@ -76,6 +80,12 @@ render_compass() {
   (( ar < 0 )) && ar=0; (( ar > GH - 1 )) && ar=$(( GH - 1 ))
   CELL["$ar,$ac"]="${CYAN}${BOLD}●${RESET}"
 
+  # Знаковые координаты — показываем двумя числами через ; рядом с точкой
+  local sx=$AGG_CX sy=$AGG_CY
+  [[ ${sx:0:1} != - ]] && sx="+$sx"
+  [[ ${sy:0:1} != - ]] && sy="+$sy"
+  local coord_label="${CYAN}${BOLD}${sx};${sy}${RESET}"
+
   printf '   %s\n' "${BOLD}▲ КОНТРОЛЬ (всё руками)${RESET}"
   local r c cell line
   for (( r=0; r<GH; r++ )); do
@@ -90,19 +100,16 @@ render_compass() {
       fi
       line+="$cell"
     done
+    # На строке с точкой дописываем её координаты «X;Y»
+    (( r == ar )) && line+="  ${coord_label}"
     printf '%s\n' "$line"
   done
   printf '   %s\n' "${BOLD}▼ УДОБСТВО (из коробки)${RESET}"
   printf '   %s\n' "${DIM}◄ новаторы$(printf '%*s' $(( GW - 20 )) '')традиции ►${RESET}"
 
-  # Подписи знаков координат
-  local sx=$AGG_CX sy=$AGG_CY
-  [[ ${sx:0:1} != - ]] && sx="+$sx"
-  [[ ${sy:0:1} != - ]] && sy="+$sy"
-
   printf '\n'
   printf '%s\n' "  ${CYAN}${BOLD}●${RESET} ${BOLD}ты:${RESET} $(compass_quadrant "$AGG_CX" "$AGG_CY")"
-  printf '%s\n' "  ${DIM}   координаты:  новат↔трад ${sx}   ·   контроль↔удоб ${sy}${RESET}"
+  printf '%s\n' "  ${DIM}   координаты (новат↔трад ; контроль↔удоб): ${sx};${sy}${RESET}"
 
   render_footer
 }

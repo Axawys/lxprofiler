@@ -177,6 +177,17 @@ INIT1=""
 VIEW_MODE="list"
 MODE_NAME="список"
 
+# Циклическое перелистывание режимов (для m и vim-style h/l)
+MODES=(list compass stats)
+MODE_NAMES=(список компас статистика)
+MODE_IDX=0
+cycle_mode() {   # $1 = +1 (вперёд) / -1 (назад)
+  local n=${#MODES[@]}
+  MODE_IDX=$(( (MODE_IDX + $1 + n) % n ))
+  VIEW_MODE=${MODES[MODE_IDX]}
+  MODE_NAME=${MODE_NAMES[MODE_IDX]}
+}
+
 interactive_view() {
   local cols sk d c total l last sel=0
 
@@ -222,12 +233,8 @@ interactive_view() {
       k|$'\x1b[A')  (( sel > 0 ))    && sel=$(( sel - 1 )) ;;
       g)            sel=0 ;;
       G)            sel=$last ;;
-      m|M)
-        case "$VIEW_MODE" in
-          list)    VIEW_MODE="compass"; MODE_NAME="компас" ;;
-          compass) VIEW_MODE="stats";   MODE_NAME="статистика" ;;
-          *)       VIEW_MODE="list";    MODE_NAME="список" ;;
-        esac ;;
+      m|M|l)        cycle_mode 1 ;;
+      h)            cycle_mode -1 ;;
     esac
   done
 

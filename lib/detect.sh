@@ -18,13 +18,13 @@ DISTRO_ALL="${DISTRO} ${DISTRO_ID} ${DISTRO_LIKE}"
 
 case "$DISTRO_ALL" in
   # ── Отечественные ──
-  *Astra*|*astra*)             add import_substituted 18 "Astra Linux"; add sysadmin 6 "корпоративная ОС"; add anonymous 4 "мандатный доступ" ;;
-  *RED\ OS*|*RedOS*|*redos*)   add import_substituted 18 "RED OS"; add sysadmin 6 "серверная ОС" ;;
-  *ALT*Atomic*|*"ALT Atomic"*) add atomic 14 "ALT Atomic"; add import_substituted 14 "ALT (отеч.)"; add fresh_witness 4 "immutable" ;;
-  *ALT\ *|*altlinux*|*"ALT "*) add import_substituted 16 "ALT Linux"; add old_hacker 4 "Sisyphus" ;;
-  *ROSA*|*rosa*)               add import_substituted 16 "ROSA Linux" ;;
-  *Calculate*|*calculate*)     add import_substituted 14 "Calculate Linux"; add old_hacker 6 "Gentoo-основа" ;;
-  *Simply*)                    add import_substituted 14 "Simply Linux" ;;
+  *Astra*|*astra*)             add import_substituted 28 "Astra Linux"; add sysadmin 6 "корпоративная ОС"; add anonymous 4 "мандатный доступ" ;;
+  *RED\ OS*|*RedOS*|*redos*)   add import_substituted 28 "RED OS"; add sysadmin 6 "серверная ОС" ;;
+  *ALT*Atomic*|*"ALT Atomic"*) add atomic 14 "ALT Atomic"; add import_substituted 22 "ALT (отеч.)"; add fresh_witness 4 "immutable" ;;
+  *ALT\ *|*altlinux*|*"ALT "*) add import_substituted 24 "ALT Linux"; add old_hacker 4 "Sisyphus" ;;
+  *ROSA*|*rosa*)               add import_substituted 24 "ROSA Linux" ;;
+  *Calculate*|*calculate*)     add import_substituted 24 "Calculate Linux"; add old_hacker 6 "Gentoo-основа" ;;
+  *Simply*)                    add import_substituted 20 "Simply Linux" ;;
   # ── Arch-семейство ──
   *Garuda*)      add gamer 10 "Garuda"; add ricer 8 "ricing из коробки" ;;
   *Artix*)       add old_hacker 12 "Artix (без systemd)"; add minimalist 4 "выбор init" ;;
@@ -64,6 +64,10 @@ case "$DISTRO_ALL" in
   *Slackware*)   add old_hacker 16 "Slackware"; add minimalist 5 "классика" ;;
   *Void*)        add old_hacker 12 "Void Linux"; add minimalist 8 "runit" ;;
   *Alpine*)      add minimalist 15 "Alpine"; add sysadmin 6 "musl + busybox"; add anonymous 4 "малая поверхность атаки" ;;
+  # ── Корпоративный энтерпрайз (скрытый класс «Корпорат») ──
+  *Red\ Hat\ Enterprise*|*RHEL*|*Rocky*|*AlmaLinux*|*CentOS*)
+                 add sysadmin 8 "enterprise-дистрибутив"; add devops 4 "корпоративный стек"
+                 case "$DISTRO_ALL" in *Red\ Hat\ Enterprise*|*RHEL*|*rhel*) META_CORPORAT=1; reasons[corporat]="Red Hat Enterprise Linux" ;; esac ;;
   *)             add old_hacker 4 "нестандартный дистрибутив" ;;
 esac
 
@@ -89,7 +93,7 @@ esac
 # Оконные менеджеры (могут сосуществовать с пустым XDG_CURRENT_DESKTOP)
 case "$DESKTOP" in
   *Hyprland*|*hyprland*) add ricer 12 "Hyprland"; add fresh_witness 8 "ricing на Wayland" ;;
-  *niri*)               add import_substituted 10 "niri (отеч. разработка)"; add fresh_witness 10 "скроллируемый WM на Wayland" ;;
+  *niri*)               add import_substituted 5 "niri (отеч. разработка)"; add fresh_witness 10 "скроллируемый WM на Wayland" ;;
   *sway*)               add minimalist 12 "sway"; add fresh_witness 5 "Wayland"; add old_hacker 3 "конфиг как код" ;;
   *river*)              add fresh_witness 12 "river (Wayland-WM)" ;;
   *i3*)                 add minimalist 12 "i3"; add old_hacker 5 "тайлинг" ;;
@@ -103,7 +107,7 @@ esac
 
 # niri может быть установлен, но не запущен в текущей сессии — всё равно сигнал
 if [[ "$DESKTOP" != *niri* ]] && has niri; then
-  add import_substituted 10 "niri установлен (отеч. разработка)"
+  add import_substituted 5 "niri установлен (отеч. разработка)"
   add fresh_witness 6 "скроллируемый WM на Wayland"
 fi
 
@@ -265,11 +269,11 @@ if has gitlab-runner || has act; then add devops 5 "CI-раннеры"; fi
 # ──────────────────────────────────────────────
 
 if has nginx || [[ -d /etc/nginx ]]; then
-  add sysadmin 8 "nginx"; add import_substituted 8 "nginx (Игорь Сысоев)"
+  add sysadmin 8 "nginx"; add import_substituted 4 "nginx (Игорь Сысоев)"
 fi
 if has apache2 || has httpd; then add sysadmin 6 "Apache"; add old_hacker 4 "httpd"; fi
 if has psql || has postgres || [[ -d /var/lib/pgsql ]] || [[ -d /var/lib/postgresql ]]; then
-  add sysadmin 8 "PostgreSQL"; add import_substituted 8 "PostgreSQL (Postgres Pro)"
+  add sysadmin 8 "PostgreSQL"; add import_substituted 4 "PostgreSQL (Postgres Pro)"
 fi
 if has mysql || has mariadb; then add sysadmin 6 "MySQL/MariaDB"; fi
 has redis-cli && add sysadmin 5 "Redis"
@@ -333,6 +337,12 @@ if has vim || has nvim; then add old_hacker 6 "Vim/Neovim"; add programmer 4 "м
 has emacs && add old_hacker 12 "Emacs"
 has helix && add fresh_witness 6 "Helix"
 has code  && add programmer 6 "VS Code"
+if has zed || has zeditor; then add programmer 6 "Zed"; add fresh_witness 3 "редактор на Rust"; fi
+has codium && add programmer 6 "VSCodium"
+has cursor && add programmer 6 "Cursor"
+has subl   && add programmer 5 "Sublime Text"
+has lapce  && { add programmer 5 "Lapce"; add fresh_witness 3 "редактор на Rust"; }
+has micro  && add programmer 3 "micro"
 if has nvim && [[ -d "${HOME:-}/.config/nvim" ]]; then add ricer 5 "кастомный Neovim"; fi
 if [[ -d "${HOME:-}/.config/JetBrains" ]] || has idea; then add programmer 6 "JetBrains IDE"; fi
 
@@ -343,14 +353,15 @@ if has gdb || has lldb; then add programmer 4 "отладчики"; fi
 # Браузеры
 # ──────────────────────────────────────────────
 
+# Яндекс.Браузер отмечаем в описании, но баллов за него не даём
 if has yandex-browser || has yandex_browser || has yandex-browser-stable; then
-  add import_substituted 12 "Яндекс.Браузер"
+  add import_substituted 0 "Яндекс.Браузер"
 fi
 
 # Русская локаль — слабый намёк на импортозамещение
 LOCALE_ALL="${LANG:-}|${LC_ALL:-}|${LC_CTYPE:-}|${LC_MESSAGES:-}"
 if [[ "$LOCALE_ALL" == *ru_RU* || "$LOCALE_ALL" == *ru_* ]]; then
-  add import_substituted 3 "русская локаль"
+  add import_substituted 2 "русская локаль"
 fi
 has librewolf       && { add anonymous 6 "LibreWolf"; add ricer 3 "приватный форк"; }
 has brave           && add anonymous 4 "Brave"
@@ -539,7 +550,9 @@ if has flatpak; then
   grep -qiE 'torproject|mullvad|signalapp|briar|protonvpn|monero' <<< "$FLATPAK_APPS" && add anonymous 5 "приватные flatpak"
   grep -qiE 'valvesoftware\.Steam|heroicgameslauncher|net\.lutris|Bottles|RetroArch|prismlauncher' <<< "$FLATPAK_APPS" && add gamer 6 "игровые flatpak"
   grep -qiE 'visualstudio|jetbrains|gnome\.Builder|vscodium|dev\.zed|neovim|GitKraken' <<< "$FLATPAK_APPS" && add programmer 5 "dev-flatpak"
-  grep -qiE 'blender|gimp|inkscape|kdenlive|obsproject|darktable|krita|Audacity' <<< "$FLATPAK_APPS" && add ricer 4 "креатив/медиа flatpak"
+  if grep -qiE 'blender|gimp|inkscape|kdenlive|obsproject|darktable|krita|Audacity' <<< "$FLATPAK_APPS"; then
+    add ricer 4 "креатив/медиа flatpak"; add creative 5 "креатив/медиа flatpak"
+  fi
 fi
 
 # ALT Tuner (org.altlinux.Tuner) — отечественная утилита настройки системы
@@ -547,7 +560,99 @@ if [[ "${FLATPAK_APPS:-}" == *org.altlinux.Tuner* ]] \
    || compgen -G "/var/lib/flatpak/exports/share/applications/org.altlinux.Tuner*" >/dev/null 2>&1 \
    || compgen -G "${HOME:-}/.local/share/flatpak/exports/share/applications/org.altlinux.Tuner*" >/dev/null 2>&1 \
    || [[ -e /usr/share/applications/org.altlinux.Tuner.desktop ]]; then
-  add import_substituted 10 "ALT Tuner"
+  add import_substituted 5 "ALT Tuner"
+fi
+
+# 1С:Предприятие — отечественный корпоративный софт
+if has 1cv8 || has 1cv8c || has 1cestart || has 1c \
+   || compgen -G "/opt/1[Cc]*" >/dev/null 2>&1 \
+   || [[ -d /opt/1cv8 ]]; then
+  add import_substituted 8 "1С:Предприятие"
+fi
+
+# Сама утилита установлена — лёгкий прикол в зачёт импортозамещения ;)
+if has lxprofile || [[ -n "${LXPROFILE_ROOT:-}" ]]; then
+  add import_substituted 1 "запущен lxprofiler ;)"
+fi
+
+# ──────────────────────────────────────────────
+# Творческая снежинка: редактирование фото/видео и написание битов
+# ──────────────────────────────────────────────
+
+for _app in gimp krita darktable rawtherapee inkscape blender \
+            kdenlive shotcut openshot flowblade \
+            ardour lmms hydrogen mixxx audacity bitwig-studio renoise; do
+  has "$_app" && add creative 4 "$_app"
+done
+has resolve && add creative 6 "DaVinci Resolve"
+
+# ──────────────────────────────────────────────
+# Расширения GNOME Shell — за каждое совсем чуть-чуть (показываем количество)
+# ──────────────────────────────────────────────
+
+if has gnome-shell || [[ "$DESKTOP" == *GNOME* || "$DESKTOP" == *gnome* ]]; then
+  GNOME_EXT=0
+  if has gsettings; then
+    GNOME_EXT=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null | grep -o "'" | wc -l)
+    GNOME_EXT=$(( GNOME_EXT / 2 ))
+  fi
+  if safe_le "$GNOME_EXT" 0; then
+    GNOME_EXT=$(find "${HOME:-}/.local/share/gnome-shell/extensions" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)
+  fi
+  if safe_ge "$GNOME_EXT" 1; then
+    EXT_PTS=$(( GNOME_EXT > 6 ? 6 : GNOME_EXT ))   # слабое влияние, но число видно
+    add ricer "$EXT_PTS" "${GNOME_EXT} расширений GNOME"
+  fi
+fi
+
+# ──────────────────────────────────────────────
+# Скрытые мета-классы: окружение запуска
+# ──────────────────────────────────────────────
+
+META_WSL=0; META_ANDROID=0; META_VM=0; META_DUALBOOT=0
+VIRT_KIND=""
+
+# WSL
+if [[ -n "${WSL_DISTRO_NAME:-}" || -n "${WSL_INTEROP:-}" ]] \
+   || grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null \
+   || grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+  META_WSL=1
+  reasons[wsl]="окружение WSL"
+fi
+
+# Termux (Android)
+if [[ -n "${TERMUX_VERSION:-}" ]] \
+   || [[ "${PREFIX:-}" == *com.termux* ]] \
+   || [[ -d /data/data/com.termux ]] \
+   || [[ "$(uname -o 2>/dev/null)" == *Android* ]]; then
+  META_ANDROID=1
+  reasons[android]="Termux на Android"
+fi
+
+# Виртуалка / контейнер (не считаем WSL и Termux за «виртуалку»)
+if (( META_WSL == 0 && META_ANDROID == 0 )); then
+  if has systemd-detect-virt; then
+    VIRT_KIND=$(systemd-detect-virt 2>/dev/null)
+    [[ -n "$VIRT_KIND" && "$VIRT_KIND" != "none" ]] && META_VM=1
+  fi
+  [[ -f /.dockerenv ]] && { META_VM=1; VIRT_KIND="${VIRT_KIND:-docker}"; }
+  grep -qaE 'docker|lxc|kubepods|containerd|podman' /proc/1/cgroup 2>/dev/null && { META_VM=1; VIRT_KIND="${VIRT_KIND:-container}"; }
+  [[ -n "${container:-}" ]] && { META_VM=1; VIRT_KIND="${VIRT_KIND:-$container}"; }
+  if grep -qiE 'qemu|kvm|virtualbox|vmware|innotek|bochs|xen|hyper-v|virtual machine' \
+       /sys/class/dmi/id/product_name /sys/class/dmi/id/sys_vendor 2>/dev/null; then
+    META_VM=1; VIRT_KIND="${VIRT_KIND:-hypervisor}"
+  fi
+  [[ $META_VM -eq 1 ]] && reasons[vm]="${VIRT_KIND:-виртуальное окружение}"
+fi
+
+# Dualboot: рядом стоит Windows (загрузчик/раздел)
+if compgen -G "/boot/efi/EFI/Microsoft" >/dev/null 2>&1 \
+   || compgen -G "/boot/EFI/Microsoft" >/dev/null 2>&1 \
+   || [[ -d /efi/EFI/Microsoft ]] \
+   || { has lsblk && lsblk -no FSTYPE 2>/dev/null | grep -qiE 'ntfs|bitlocker'; } \
+   || grep -qiE 'windows|microsoft' /boot/grub/grub.cfg /boot/grub2/grub.cfg 2>/dev/null; then
+  META_DUALBOOT=1
+  reasons[dualboot]="рядом обнаружен Windows"
 fi
 
 # ──────────────────────────────────────────────
@@ -639,8 +744,11 @@ fi
 # Нормализация и сортировка
 # ──────────────────────────────────────────────
 
+# Максимум считаем только по «настоящим» архетипам, чтобы скрытые мета-классы
+# со 100% не ломали шкалу остальных.
 MAX_SCORE=1
 for key in "${!score[@]}"; do
+  [[ -n "${HIDDEN[$key]:-}" ]] && continue
   if safe_gt "${score[$key]}" "$MAX_SCORE"; then
     MAX_SCORE=${score[$key]}
   fi
@@ -648,12 +756,29 @@ done
 
 declare -A norm_score=()
 for key in "${!score[@]}"; do
+  [[ -n "${HIDDEN[$key]:-}" ]] && continue
   norm_score[$key]=$(( score[$key] * 100 / MAX_SCORE ))
 done
 
+# «Нормис»: чем ниже абсолютный максимум сигналов, тем выше заполненность
+if   safe_le "$MAX_SCORE" 12; then norm_score[normis]=100
+elif safe_ge "$MAX_SCORE" 40; then norm_score[normis]=0
+else norm_score[normis]=$(( (40 - MAX_SCORE) * 100 / 28 )); fi
+reasons[normis]="мало ярких сигналов других классов"
+
+# Булевы скрытые классы: 100% при срабатывании, иначе 0%
+norm_score[vm]=$(( ${META_VM:-0} ? 100 : 0 ))
+norm_score[wsl]=$(( ${META_WSL:-0} ? 100 : 0 ))
+norm_score[android]=$(( ${META_ANDROID:-0} ? 100 : 0 ))
+norm_score[dualboot]=$(( ${META_DUALBOOT:-0} ? 100 : 0 ))
+norm_score[corporat]=$(( ${META_CORPORAT:-0} ? 100 : 0 ))
+
+# Сортировка по убыванию; скрытые классы показываем только при > 20%
 sorted_keys=()
 while IFS= read -r line; do
-  sorted_keys+=("${line#* }")
+  _pct=${line%% *}; _key=${line#* }
+  if [[ -n "${HIDDEN[$_key]:-}" ]] && (( _pct <= 20 )); then continue; fi
+  sorted_keys+=("$_key")
 done < <(
   for key in "${!norm_score[@]}"; do
     printf '%d %s\n' "${norm_score[$key]}" "$key"
