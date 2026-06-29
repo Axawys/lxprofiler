@@ -83,6 +83,7 @@ print_static() {
   echo "${DIM}  Дистрибутив : ${DISTRO}${RESET}"
   echo "${DIM}  Ядро        : $(uname -r 2>/dev/null || echo '?')${RESET}"
   echo "${DIM}  Init        : $(ps -p 1 -o comm= 2>/dev/null || echo '?')${RESET}"
+  echo "${DIM}  Загрузчик   : ${BL_LABEL:-?}${RESET}"
   echo
 
   local maxlen=0 key label len

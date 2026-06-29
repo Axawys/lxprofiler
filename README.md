@@ -144,6 +144,7 @@ cd lxprofiler
 - **Тип сессии** — Wayland / X11 / TTY
 - **Железо** — объём RAM, число ядер CPU
 - **Init-система** — systemd, runit, OpenRC, s6, dinit
+- **Загрузчик** — GRUB (с учётом кастомной темы), systemd-boot, rEFInd, Limine, syslinux/extlinux, EFISTUB, LILO
 - **Состояние системы** — аптайм, возраст установки, число пакетов, чужие пакеты
   (AUR), кастомное ядро (zen/xanmod/liquorix/hardened/rt/lts), снапшоты ФС
   (snapper/Timeshift), ZFS, Nix/home-manager

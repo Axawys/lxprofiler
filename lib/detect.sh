@@ -185,6 +185,52 @@ else
 fi
 
 # ──────────────────────────────────────────────
+# Загрузчик ОС
+#   GRUB — дефолт почти везде, сам по себе не сигнал (как и systemd);
+#   осознанный выбор другого загрузчика кое-что говорит о пользователе.
+# ──────────────────────────────────────────────
+
+BL=""; BL_LABEL=""
+_bl_out=""
+has bootctl && _bl_out=$(bootctl status 2>/dev/null)
+
+if [[ -f /etc/lilo.conf ]] || has lilo; then
+  BL=lilo
+elif [[ -d /boot/efi/EFI/refind || -d /boot/EFI/refind || -f /boot/refind_linux.conf ]] \
+     || has refind-install || [[ "$_bl_out" == *rEFInd* ]]; then
+  BL=refind
+elif [[ -f /boot/limine.cfg || -f /boot/limine.conf || -f /boot/limine/limine.conf ]] || has limine; then
+  BL=limine
+elif [[ "$_bl_out" == *systemd-boot* ]] || [[ -d /boot/efi/EFI/systemd || -d /boot/EFI/systemd ]] \
+     || { [[ -f /boot/loader/loader.conf ]] && [[ ! -d /boot/grub && ! -d /boot/grub2 ]]; }; then
+  BL=systemd-boot
+elif [[ -d /boot/syslinux || -d /boot/extlinux || -f /boot/syslinux/syslinux.cfg || -f /boot/extlinux/extlinux.conf ]] || has extlinux; then
+  BL=syslinux
+elif has efibootmgr && efibootmgr -v 2>/dev/null | grep -qiE 'vmlinuz|linux\.efi|EFISTUB'; then
+  BL=efistub
+elif [[ -d /boot/grub || -d /boot/grub2 ]] || has grub-install || has grub2-install || has update-grub || [[ "$_bl_out" == *GRUB* ]]; then
+  BL=grub
+fi
+
+case "$BL" in
+  lilo)         BL_LABEL="LILO";              add old_hacker 12 "LILO (олдскул-загрузчик)" ;;
+  refind)       BL_LABEL="rEFInd";            add ricer 8 "rEFInd (красивый загрузчик)" ;;
+  limine)       BL_LABEL="Limine";            add fresh_witness 8 "Limine"; add old_hacker 3 "осознанный выбор загрузчика" ;;
+  systemd-boot) BL_LABEL="systemd-boot";      add minimalist 6 "systemd-boot"; add fresh_witness 3 "минимальный EFI-загрузчик" ;;
+  syslinux)     BL_LABEL="syslinux/extlinux"; add old_hacker 6 "syslinux/extlinux"; add minimalist 3 "лёгкий загрузчик" ;;
+  efistub)      BL_LABEL="EFISTUB";           add minimalist 8 "EFISTUB (без загрузчика)"; add old_hacker 6 "прямая загрузка ядра" ;;
+  grub)
+    BL_LABEL="GRUB"
+    # GRUB сам по себе — дефолт; засчитываем только кастомную тему как райсинг
+    if grep -qsE '^[[:space:]]*GRUB_THEME=' /etc/default/grub 2>/dev/null \
+       || compgen -G "/boot/grub*/themes/*/theme.txt" >/dev/null 2>&1; then
+      add ricer 5 "кастомная тема GRUB"
+    fi
+    ;;
+  *) BL_LABEL="?" ;;
+esac
+
+# ──────────────────────────────────────────────
 # Шифрование и приватность → Анонимус
 # ──────────────────────────────────────────────
 
