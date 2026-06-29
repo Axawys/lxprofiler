@@ -28,6 +28,13 @@ make_broken_bar() {
   printf '%s' "█▒ █░▓  ░▒█ ░ ▓█░ ▓?"
 }
 
+# Маскирует название вопросительными знаками (той же длины — раскладка не плывёт)
+mask_label() {
+  local n=${#1} s=""
+  while (( n-- > 0 )); do s+="?"; done
+  printf '%s' "$s"
+}
+
 # ──────────────────────────────────────────────
 # Сборка прокручиваемого тела (BODY) для интерактивного просмотра
 # ──────────────────────────────────────────────
@@ -76,16 +83,17 @@ print_static() {
 
   local p color pad pf bar
   for key in "${sorted_keys[@]}"; do
-    p=${norm_score[$key]}; label="${LABEL[$key]}"; len=${#label}
-    pad=$(( maxlen - len ))
+    p=${norm_score[$key]}; label="${LABEL[$key]}"
     if [[ -n "${MYSTERY[$key]:-}" ]]; then
-      color=$DIM; pf="???"; bar=$(make_broken_bar)
+      # в статике навести курсор нельзя — имя остаётся закрытым
+      color=$DIM; pf="???"; bar=$(make_broken_bar); label=$(mask_label "$label")
     else
       if safe_ge "$p" 80; then color=$GREEN
       elif safe_ge "$p" 50; then color=$YELLOW
       else color=$DIM; fi
       pf=$(printf '%3d' "$p"); bar=$(make_bar "$p")
     fi
+    pad=$(( maxlen - ${#label} ))
     printf "${color}%s%*s${RESET}  %s%%  ${color}%s${RESET}\n" "$label" "$pad" "" "$pf" "$bar"
   done
 
@@ -144,12 +152,14 @@ render_list() {
   local pf bar
   for i in "${!sorted_keys[@]}"; do
     sk=${sorted_keys[i]}; lbl=${LABEL[$sk]}; p=${norm_score[$sk]}
-    pad=$(( MAXLEN - ${#lbl} ))
     if [[ -n "${MYSTERY[$sk]:-}" ]]; then
       pf="???"; bar=$(make_broken_bar)
+      # имя скрыто вопросами и открывается только под маркером
+      (( i == sel )) || lbl=$(mask_label "$lbl")
     else
       pf=$(printf '%3d' "$p"); bar=$(make_bar "$p")
     fi
+    pad=$(( MAXLEN - ${#lbl} ))
     if (( i == sel )); then
       printf "${GREEN}${BOLD}▶ %s%*s  %s%%  %s${RESET}\n" "$lbl" "$pad" "" "$pf" "$bar"
     else
