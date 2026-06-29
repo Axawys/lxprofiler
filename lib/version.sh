@@ -8,4 +8,4 @@
 #     Это число показывается в `lxprofile --version` (вместе с git-хешем),
 #     а CHANGELOG.md — в уведомлении об обновлении.
 
-LXPROFILE_VERSION="4.10.1"
+LXPROFILE_VERSION="4.11.0"

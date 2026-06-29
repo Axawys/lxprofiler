@@ -19,6 +19,37 @@ _version_gt() {
   [[ "$1" != "$2" ]] && [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$1" ]]
 }
 
+# Показывает changelog из локального CHANGELOG.md:
+#   $1 пуст      → последние 5 версий;
+#   $1 = версия  → запись этой версии (или ошибка со списком доступных).
+do_changes() {
+  local want="${1:-}" file="$LXPROFILE_ROOT/CHANGELOG.md"
+  if [[ ! -r $file ]]; then
+    printf 'CHANGELOG.md не найден в %s\n' "$LXPROFILE_ROOT" >&2
+    return 1
+  fi
+  if [[ -n $want ]]; then
+    want=${want#v}
+    local out
+    out=$(awk -v v="$want" '
+      $1=="##" && $2==v { p=1; print; next }
+      $1=="##" && p     { p=0 }
+      p { print }
+    ' "$file")
+    if [[ -z ${out//[[:space:]]/} ]]; then
+      printf 'Версия %s не найдена. Доступные версии:\n' "$want" >&2
+      grep -oE '^## [0-9]+\.[0-9]+\.[0-9]+' "$file" | sed 's/^## /  /' >&2
+      return 1
+    fi
+    printf '%s\n' "$out"
+  else
+    awk '
+      /^## [0-9]+\.[0-9]+\.[0-9]+/ { n++; if (n > 5) exit }
+      n >= 1 { print }
+    ' "$file"
+  fi
+}
+
 do_update() {
   if ! command -v git >/dev/null 2>&1; then
     printf 'Для обновления нужен git, но он не найден.\n' >&2

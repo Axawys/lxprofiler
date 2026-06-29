@@ -62,6 +62,7 @@ lxprofile — Linux Psychological Profiler
 
 ОПЦИИ:
   -u, --update          обновить lxprofile с GitHub
+  -c, --changes [ВЕР]   changelog: указанной версии или 5 последних
       --rm, --remove    удалить lxprofile из системы
   -v, --version         показать версию
   -h, --help            показать эту справку
@@ -132,6 +133,7 @@ case "${1:-}" in
   -v|--version) print_version; exit 0 ;;
   -h|--help)    print_help;    exit 0 ;;
   -u|--update)  do_update;     exit $? ;;
+  -c|--changes) do_changes "${2:-}"; exit $? ;;
   --rm|--remove) do_remove;    exit $? ;;
   "")           : ;;  # без аргументов — запускаем профайлер
   *)
