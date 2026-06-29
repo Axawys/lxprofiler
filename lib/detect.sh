@@ -3,6 +3,32 @@
 # (требует lib/data.sh и lib/helpers.sh)
 
 # ──────────────────────────────────────────────
+# Корпус истории команд и shell-конфигов — собираем заранее, чтобы по нему можно
+# было проверять РЕАЛЬНОЕ использование инструмента, а не только его наличие.
+# ──────────────────────────────────────────────
+BEHAVIOR=""
+for _bf in "${HOME:-}/.bash_history" "${HOME:-}/.zsh_history" \
+           "${HOME:-}/.local/share/fish/fish_history" \
+           "${HOME:-}/.bashrc" "${HOME:-}/.zshrc" "${HOME:-}/.bash_aliases" \
+           "${HOME:-}/.config/fish/config.fish" "${HOME:-}/.profile"; do
+  [[ -r $_bf ]] && BEHAVIOR+=$'\n'"$(cat "$_bf" 2>/dev/null)"
+done
+
+# used PATTERN — есть ли след использования инструмента в истории/конфигах.
+# ВАЖНО: если истории нет вовсе, считаем «не наказывать» (возвращаем успех),
+# чтобы не терять инструменты, чьё использование не оставляет следа.
+used() {
+  [[ -z $BEHAVIOR ]] && return 0
+  grep -aqiwE "$1" <<< "$BEHAVIOR"
+}
+
+# has_used CMD [PATTERN] — установлен И есть след использования.
+# Применять только к интерактивным CLI-инструментам (их запускают по имени).
+has_used() {
+  has "$1" && used "${2:-$1}"
+}
+
+# ──────────────────────────────────────────────
 # Дистрибутив
 # ──────────────────────────────────────────────
 
@@ -274,53 +300,56 @@ if has xmms || has audacious; then add legacy 4 "XMMS/Audacious"; fi
 # Шифрование и приватность → Анонимус
 # ──────────────────────────────────────────────
 
-has gpg         && add anonymous 6  "GPG"
-has pass        && add anonymous 8  "pass"
-has age         && add anonymous 6  "age"
-has veracrypt   && add anonymous 14 "VeraCrypt"
-has cryptsetup  && add anonymous 5  "cryptsetup"
-has tomb        && add anonymous 8  "Tomb"
-has keepassxc   && add anonymous 5  "KeePassXC"
-has gocryptfs   && add anonymous 6  "gocryptfs"
-has encfs       && add anonymous 5  "EncFS"
+# CLI-инструменты шифрования — по следу использования; GUI (KeePassXC) — по наличию.
+has_used gpg         && add anonymous 6  "GPG"
+has_used pass        && add anonymous 8  "pass"
+has_used age         && add anonymous 6  "age"
+has veracrypt        && add anonymous 14 "VeraCrypt"
+has_used cryptsetup  && add anonymous 5  "cryptsetup"
+has_used tomb        && add anonymous 8  "Tomb"
+has keepassxc        && add anonymous 5  "KeePassXC"
+has_used gocryptfs   && add anonymous 6  "gocryptfs"
+has_used encfs       && add anonymous 5  "EncFS"
 
-# Анонимность сети
+# Анонимность сети (GUI/демоны — по наличию, CLI — по следу использования)
 has tor                 && add anonymous 12 "Tor"
 has torbrowser-launcher && add anonymous 10 "Tor Browser"
 has i2prouter           && add anonymous 10 "I2P"
-has proxychains         && { add anonymous 8 "proxychains"; add pentester 4 "цепочки прокси"; }
+has_used proxychains    && { add anonymous 8 "proxychains"; add pentester 4 "цепочки прокси"; }
 has mullvad             && add anonymous 10 "Mullvad VPN"
 has protonvpn           && add anonymous 8  "ProtonVPN"
 has protonvpn-cli       && add anonymous 8  "ProtonVPN"
-has openvpn             && add anonymous 6  "OpenVPN"
-if has wg || has wg-quick; then add anonymous 6 "WireGuard"; fi
+has_used openvpn        && add anonymous 6  "OpenVPN"
+if has_used wg || has_used wg-quick; then add anonymous 6 "WireGuard"; fi
 
 # ──────────────────────────────────────────────
 # Аудит безопасности и взлом → Хакер
+#   CLI-инструменты засчитываем только при следах использования (has_used);
+#   GUI (Wireshark/Burp/ZAP/Ghidra) — по наличию, их запуск в истории не виден.
 # ──────────────────────────────────────────────
 
-has nmap        && add pentester 12 "nmap"
-has masscan     && add pentester 8  "masscan"
-has wireshark   && add pentester 8  "Wireshark"
-has tshark      && add pentester 6  "tshark"
-has tcpdump     && add pentester 5  "tcpdump"
-has msfconsole  && add pentester 16 "Metasploit"
-has aircrack-ng && add pentester 12 "aircrack-ng"
-has hashcat     && add pentester 10 "hashcat"
-has john        && add pentester 10 "John the Ripper"
-has hydra       && add pentester 10 "hydra"
-has sqlmap      && add pentester 10 "sqlmap"
-has nikto       && add pentester 8  "nikto"
-has gobuster    && add pentester 6  "gobuster"
-has ffuf        && add pentester 6  "ffuf"
-has burpsuite   && add pentester 12 "Burp Suite"
-has zaproxy     && add pentester 8  "OWASP ZAP"
-has radare2     && add pentester 10 "radare2"
-has r2          && add pentester 10 "radare2"
-has ghidra      && add pentester 12 "Ghidra"
-has binwalk     && add pentester 6  "binwalk"
-has volatility  && add pentester 8  "Volatility"
-has wpscan      && add pentester 6  "WPScan"
+has_used nmap        && add pentester 12 "nmap"
+has_used masscan     && add pentester 8  "masscan"
+has wireshark        && add pentester 8  "Wireshark"
+has_used tshark      && add pentester 6  "tshark"
+has_used tcpdump     && add pentester 5  "tcpdump"
+has_used msfconsole  && add pentester 16 "Metasploit"
+has_used aircrack-ng && add pentester 12 "aircrack-ng"
+has_used hashcat     && add pentester 10 "hashcat"
+has_used john        && add pentester 10 "John the Ripper"
+has_used hydra       && add pentester 10 "hydra"
+has_used sqlmap      && add pentester 10 "sqlmap"
+has_used nikto       && add pentester 8  "nikto"
+has_used gobuster    && add pentester 6  "gobuster"
+has_used ffuf        && add pentester 6  "ffuf"
+has burpsuite        && add pentester 12 "Burp Suite"
+has zaproxy          && add pentester 8  "OWASP ZAP"
+has_used radare2     && add pentester 10 "radare2"
+has_used r2          && add pentester 10 "radare2"
+has ghidra           && add pentester 12 "Ghidra"
+has_used binwalk     && add pentester 6  "binwalk"
+has_used volatility  && add pentester 8  "Volatility"
+has_used wpscan      && add pentester 6  "WPScan"
 
 # Защитные механизмы. SELinux/AppArmor/файрвол включены ПО УМОЛЧАНИЮ во многих
 # дистрибутивах (Fedora, Ubuntu, RHEL), поэтому сами по себе не считаются
@@ -331,31 +360,41 @@ has fail2ban && add sysadmin 6 "fail2ban"
 # Контейнеры, оркестрация, IaC → DevOps (эфемерное, декларативное)
 # ──────────────────────────────────────────────
 
-has docker     && add devops 5 "Docker (установлен)"
-has podman     && { add devops 5 "Podman (установлен)"; add anonymous 3 "rootless-контейнеры"; }
-has kubectl    && add devops 14 "Kubernetes"
-has k9s        && add devops 8  "k9s"
-has helm       && add devops 8  "Helm"
+# CLI-инструменты DevOps засчитываем по следу использования (их запускают руками)
+has_used docker     && add devops 5 "Docker"
+has_used podman     && { add devops 5 "Podman"; add anonymous 3 "rootless-контейнеры"; }
+has_used kubectl    && add devops 14 "Kubernetes"
+has_used k9s        && add devops 8  "k9s"
+has_used helm       && add devops 8  "Helm"
 if has minikube || has kind; then add devops 6 "локальный кластер"; fi
 if has argocd || has flux || has skaffold; then add devops 8 "GitOps"; fi
-has terraform  && add devops 12 "Terraform"
-has opentofu   && add devops 10 "OpenTofu"
-has pulumi     && add devops 8  "Pulumi"
-has ansible    && { add devops 8 "Ansible"; add sysadmin 4 "автоматизация"; }
+has_used terraform  && add devops 12 "Terraform"
+has_used opentofu   && add devops 10 "OpenTofu"
+has_used pulumi     && add devops 8  "Pulumi"
+has_used ansible    && { add devops 8 "Ansible"; add sysadmin 4 "автоматизация"; }
 if has puppet || has chef || has salt; then add devops 8 "config management"; fi
-has vagrant    && add devops 6 "Vagrant"
+has_used vagrant    && add devops 6 "Vagrant"
 if has qemu-img || has virt-manager || has virsh; then add devops 8 "QEMU/KVM"; fi
 if has lxc || has lxd || has incus; then add devops 6 "LXC/Incus"; fi
 if has vault || has consul || has nomad; then add devops 8 "HashiCorp-стек"; fi
-if has aws || has gcloud || has az || has doctl; then add devops 8 "облачный CLI"; fi
+if has_used aws || has_used gcloud || has_used az || has_used doctl; then add devops 8 "облачный CLI"; fi
 if has gitlab-runner || has act; then add devops 5 "CI-раннеры"; fi
 
 # ──────────────────────────────────────────────
 # Серверы, демоны, бэкапы → Системный администратор (живые pets)
 # ──────────────────────────────────────────────
 
+# nginx: засчитываем при следе использования — команда в истории, ИЛИ активный/
+# включённый сервис, ИЛИ непустые логи доступа. (used возвращает true, если
+# истории нет вовсе — тогда не наказываем.)
 if has nginx || [[ -d /etc/nginx ]]; then
-  add sysadmin 8 "nginx"; add import_substituted 4 "nginx (Игорь Сысоев)"
+  if used 'nginx' \
+     || pidof nginx >/dev/null 2>&1 \
+     || systemctl is-active nginx >/dev/null 2>&1 \
+     || systemctl is-enabled nginx >/dev/null 2>&1 \
+     || compgen -G '/var/log/nginx/access.log*' >/dev/null 2>&1; then
+    add sysadmin 8 "nginx"; add import_substituted 4 "nginx (Игорь Сысоев)"
+  fi
 fi
 if has apache2 || has httpd; then add sysadmin 6 "Apache"; add old_hacker 4 "httpd"; fi
 if has psql || has postgres || [[ -d /var/lib/pgsql ]] || [[ -d /var/lib/postgresql ]]; then
@@ -771,13 +810,7 @@ fi
 #   просто установлен (зависимостью или по умолчанию в дистрибутиве).
 # ──────────────────────────────────────────────
 
-BEHAVIOR=""
-for f in "${HOME:-}/.bash_history" "${HOME:-}/.zsh_history" \
-         "${HOME:-}/.local/share/fish/fish_history" \
-         "${HOME:-}/.bashrc" "${HOME:-}/.zshrc" "${HOME:-}/.bash_aliases" \
-         "${HOME:-}/.config/fish/config.fish" "${HOME:-}/.profile"; do
-  [[ -r $f ]] && BEHAVIOR+=$'\n'"$(cat "$f" 2>/dev/null)"
-done
+# Корпус BEHAVIOR уже собран в начале файла (используется и для used()).
 
 # behav PATTERN CLASS PTS REASON THRESHOLD
 # Начисляет очки, если команда встречается в истории/конфигах не реже THRESHOLD раз.
