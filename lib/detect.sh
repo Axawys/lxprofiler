@@ -773,14 +773,18 @@ norm_score[android]=$(( ${META_ANDROID:-0} ? 100 : 0 ))
 norm_score[dualboot]=$(( ${META_DUALBOOT:-0} ? 100 : 0 ))
 norm_score[corporat]=$(( ${META_CORPORAT:-0} ? 100 : 0 ))
 
-# Сортировка по убыванию; скрытые классы показываем только при > 20%
+# Сортировка по убыванию; скрытые классы показываем только при > 20%.
+# «Таинственные» классы (vm/wsl/…) уводим в самый низ списка.
 sorted_keys=()
+mystery_keys=()
 while IFS= read -r line; do
   _pct=${line%% *}; _key=${line#* }
   if [[ -n "${HIDDEN[$_key]:-}" ]] && (( _pct <= 20 )); then continue; fi
+  if [[ -n "${MYSTERY[$_key]:-}" ]]; then mystery_keys+=("$_key"); continue; fi
   sorted_keys+=("$_key")
 done < <(
   for key in "${!norm_score[@]}"; do
     printf '%d %s\n' "${norm_score[$key]}" "$key"
   done | sort -rn
 )
+(( ${#mystery_keys[@]} )) && sorted_keys+=("${mystery_keys[@]}")

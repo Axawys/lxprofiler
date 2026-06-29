@@ -23,6 +23,11 @@ make_bar() {
   printf '%s' "$b"
 }
 
+# «Сломанная» полоска для таинственных классов (ровно 20 символов в ширину)
+make_broken_bar() {
+  printf '%s' "█▒ █░▓  ░▒█ ░ ▓█░ ▓?"
+}
+
 # ──────────────────────────────────────────────
 # Сборка прокручиваемого тела (BODY) для интерактивного просмотра
 # ──────────────────────────────────────────────
@@ -69,14 +74,19 @@ print_static() {
     (( len > maxlen )) && maxlen=$len
   done
 
-  local p color pad
+  local p color pad pf bar
   for key in "${sorted_keys[@]}"; do
     p=${norm_score[$key]}; label="${LABEL[$key]}"; len=${#label}
-    if safe_ge "$p" 80; then color=$GREEN
-    elif safe_ge "$p" 50; then color=$YELLOW
-    else color=$DIM; fi
     pad=$(( maxlen - len ))
-    printf "${color}%s%*s${RESET}  %3d%%  ${color}%s${RESET}\n" "$label" "$pad" "" "$p" "$(make_bar "$p")"
+    if [[ -n "${MYSTERY[$key]:-}" ]]; then
+      color=$DIM; pf="???"; bar=$(make_broken_bar)
+    else
+      if safe_ge "$p" 80; then color=$GREEN
+      elif safe_ge "$p" 50; then color=$YELLOW
+      else color=$DIM; fi
+      pf=$(printf '%3d' "$p"); bar=$(make_bar "$p")
+    fi
+    printf "${color}%s%*s${RESET}  %s%%  ${color}%s${RESET}\n" "$label" "$pad" "" "$pf" "$bar"
   done
 
   local W=${sorted_keys[0]} S=${sorted_keys[1]} T=${sorted_keys[2]}
@@ -131,20 +141,28 @@ render_list() {
   local sel=$1 i sk lbl p pad used l
   render_header "Профиль архетипов"
 
+  local pf bar
   for i in "${!sorted_keys[@]}"; do
     sk=${sorted_keys[i]}; lbl=${LABEL[$sk]}; p=${norm_score[$sk]}
     pad=$(( MAXLEN - ${#lbl} ))
-    if (( i == sel )); then
-      printf "${GREEN}${BOLD}▶ %s%*s  %3d%%  %s${RESET}\n" "$lbl" "$pad" "" "$p" "$(make_bar "$p")"
+    if [[ -n "${MYSTERY[$sk]:-}" ]]; then
+      pf="???"; bar=$(make_broken_bar)
     else
-      printf "${DIM}  %s%*s  %3d%%  %s${RESET}\n" "$lbl" "$pad" "" "$p" "$(make_bar "$p")"
+      pf=$(printf '%3d' "$p"); bar=$(make_bar "$p")
+    fi
+    if (( i == sel )); then
+      printf "${GREEN}${BOLD}▶ %s%*s  %s%%  %s${RESET}\n" "$lbl" "$pad" "" "$pf" "$bar"
+    else
+      printf "${DIM}  %s%*s  %s%%  %s${RESET}\n" "$lbl" "$pad" "" "$pf" "$bar"
     fi
   done
 
   printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
 
   sk=${sorted_keys[sel]}; used=0
-  printf "${BOLD}${GREEN}▶ %s — %d%%${RESET}\n" "${LABEL[$sk]}" "${norm_score[$sk]}"; used=$(( used + 1 ))
+  local selpf="${norm_score[$sk]}%"
+  [[ -n "${MYSTERY[$sk]:-}" ]] && selpf="???%"
+  printf "${BOLD}${GREEN}▶ %s — %s${RESET}\n" "${LABEL[$sk]}" "$selpf"; used=$(( used + 1 ))
   wrap_into "$(describe "$sk" "${norm_score[$sk]}")" "$WRAP_W"
   for l in "${WRAPPED[@]}"; do printf "  %s\n" "$l"; used=$(( used + 1 )); done
   printf '\n'; used=$(( used + 1 ))
