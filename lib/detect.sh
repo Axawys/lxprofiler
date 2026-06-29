@@ -231,6 +231,46 @@ case "$BL" in
 esac
 
 # ──────────────────────────────────────────────
+# Любитель легаси (скрытый класс): старое ядро, 32-бит, X11, древние DE/WM, олд-софт
+# ──────────────────────────────────────────────
+
+KVER_MAJOR=$(uname -r 2>/dev/null | cut -d. -f1)
+[[ $KVER_MAJOR =~ ^[0-9]+$ ]] || KVER_MAJOR=0
+if   safe_gt "$KVER_MAJOR" 0 && safe_le "$KVER_MAJOR" 4; then add legacy 12 "старое ядро ${KVER_MAJOR}.x"
+elif [[ $KVER_MAJOR == 5 ]];                              then add legacy 4  "ядро 5.x (не самое свежее)"
+fi
+
+# 32-битная архитектура — почти всегда легаси
+case "$(uname -m 2>/dev/null)" in
+  i386|i486|i586|i686) add legacy 12 "32-битная система" ;;
+esac
+
+# X11/Xorg вместо Wayland — лёгкий легаси-сигнал
+[[ "$SESSION_TYPE" == x11 ]] && add legacy 4 "сессия X11/Xorg"
+
+# Древние DE и оконные менеджеры
+case "$DESKTOP" in
+  *Trinity*|*TDE*)                       add legacy 12 "Trinity (KDE 3)" ;;
+  *MATE*|*mate*)                         add legacy 6  "MATE (наследник GNOME 2)" ;;
+  *LXDE*)                                add legacy 6  "LXDE" ;;
+esac
+case "$DESKTOP" in
+  *fvwm*|*FVWM*)                         add legacy 12 "FVWM" ;;
+  *windowmaker*|*WindowMaker*|*wmaker*)  add legacy 10 "Window Maker" ;;
+  *icewm*|*IceWM*)                       add legacy 10 "IceWM" ;;
+  *twm*|*cwm*)                           add legacy 10 "классический WM (twm/cwm)" ;;
+  *fluxbox*|*blackbox*)                  add legacy 8  "Fluxbox/Blackbox" ;;
+  *jwm*|*JWM*)                           add legacy 8  "JWM" ;;
+  *enlightenment*|*Enlightenment*)       add legacy 6  "Enlightenment" ;;
+  *openbox*|*Openbox*)                   add legacy 5  "Openbox" ;;
+esac
+
+# Легаси-софт
+if has mplayer && ! has mpv; then add legacy 5 "MPlayer (без mpv)"; fi
+has pidgin && add legacy 5 "Pidgin"
+if has xmms || has audacious; then add legacy 4 "XMMS/Audacious"; fi
+
+# ──────────────────────────────────────────────
 # Шифрование и приватность → Анонимус
 # ──────────────────────────────────────────────
 
@@ -824,9 +864,11 @@ for key in "${!score[@]}"; do
   fi
 done
 
+# Нормализуем по MAX_SCORE всё, кроме булевых «таинственных» (им 100/0 ниже)
+# и normis (у него своя формула). Градуированные скрытые (legacy) сюда входят.
 declare -A norm_score=()
 for key in "${!score[@]}"; do
-  [[ -n "${HIDDEN[$key]:-}" ]] && continue
+  [[ -n "${MYSTERY[$key]:-}" || $key == normis ]] && continue
   norm_score[$key]=$(( score[$key] * 100 / MAX_SCORE ))
 done
 
