@@ -152,11 +152,11 @@ render_list() {
   local pf bar
   for i in "${!sorted_keys[@]}"; do
     sk=${sorted_keys[i]}; lbl=${LABEL[$sk]}; p=${norm_score[$sk]}
-    if [[ -n "${MYSTERY[$sk]:-}" ]]; then
-      pf="???"; bar=$(make_broken_bar)
-      # имя скрыто вопросами и открывается только под маркером
-      (( i == sel )) || lbl=$(mask_label "$lbl")
+    if [[ -n "${MYSTERY[$sk]:-}" ]] && (( i != sel )); then
+      # пока не наведён — имя скрыто вопросами, процент «???», полоска сломана
+      pf="???"; bar=$(make_broken_bar); lbl=$(mask_label "$lbl")
     else
+      # обычный класс или таинственный под маркером — нормальный вид
       pf=$(printf '%3d' "$p"); bar=$(make_bar "$p")
     fi
     pad=$(( MAXLEN - ${#lbl} ))
@@ -170,9 +170,8 @@ render_list() {
   printf '%s\n' "${DIM}  ────────────────────────────────────────────${RESET}"
 
   sk=${sorted_keys[sel]}; used=0
-  local selpf="${norm_score[$sk]}%"
-  [[ -n "${MYSTERY[$sk]:-}" ]] && selpf="???%"
-  printf "${BOLD}${GREEN}▶ %s — %s${RESET}\n" "${LABEL[$sk]}" "$selpf"; used=$(( used + 1 ))
+  # Выбранный элемент всегда «раскрыт» — показываем настоящий процент
+  printf "${BOLD}${GREEN}▶ %s — %d%%${RESET}\n" "${LABEL[$sk]}" "${norm_score[$sk]}"; used=$(( used + 1 ))
   wrap_into "$(describe "$sk" "${norm_score[$sk]}")" "$WRAP_W"
   for l in "${WRAPPED[@]}"; do printf "  %s\n" "$l"; used=$(( used + 1 )); done
   printf '\n'; used=$(( used + 1 ))

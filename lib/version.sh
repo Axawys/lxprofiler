@@ -6,4 +6,4 @@
 #       MAJOR — несовместимые изменения, MINOR — новые фичи, PATCH — багфиксы.
 #     Это число показывается в `lxprofile --version` (вместе с git-хешем).
 
-LXPROFILE_VERSION="4.7.2"
+LXPROFILE_VERSION="4.7.3"
