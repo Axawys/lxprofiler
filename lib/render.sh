@@ -108,46 +108,35 @@ wrap_into() {
 # ──────────────────────────────────────────────
 
 print_static() {
+  # Минималистичная ASCII-надпись вместо шапки с версией
   echo
-  echo "${BOLD}╔══════════════════════════════════════════╗${RESET}"
-  echo "${BOLD}║     Linux Psychological Profiler v4.0    ║${RESET}"
-  echo "${BOLD}╚══════════════════════════════════════════╝${RESET}"
-  echo "${DIM}  Дистрибутив : ${DISTRO}${RESET}"
-  echo "${DIM}  Ядро        : $(uname -r 2>/dev/null || echo '?')${RESET}"
-  echo "${DIM}  Init        : $(ps -p 1 -o comm= 2>/dev/null || echo '?')${RESET}"
-  echo "${DIM}  Загрузчик   : ${BL_LABEL:-?}${RESET}"
+  echo "  ${BOLD}${PENGUIN}l x p r o f i l e${RESET}"
+  echo "  ${DIM}╶─────────────────╴${RESET}"
   echo
 
-  local maxlen=0 key label len
+  # Мини-рассказ: описания всех архетипов по убыванию заполненности
+  local key label color
   for key in "${sorted_keys[@]}"; do
-    label="${LABEL[$key]}"; len=${#label}
-    (( len > maxlen )) && maxlen=$len
-  done
-
-  local p color pad pf bar
-  for key in "${sorted_keys[@]}"; do
-    p=${norm_score[$key]}; label="${LABEL[$key]}"
+    label="${LABEL[$key]}"
     if [[ -n "${MYSTERY[$key]:-}" ]]; then
-      # в статике навести курсор нельзя — имя остаётся закрытым
-      color=$DIM; pf="???"; bar=$(make_broken_bar); label=$(mask_label "$label")
-    else
-      if safe_ge "$p" 80; then color=$GREEN
-      elif safe_ge "$p" 50; then color=$YELLOW
-      else color=$DIM; fi
-      pf=$(printf '%3d' "$p"); bar=$(make_bar "$p")
+      color=$DIM; label=$(mask_label "$label")   # таинственные — имя закрыто
+    elif safe_ge "${norm_score[$key]}" 80; then color=$GREEN
+    elif safe_ge "${norm_score[$key]}" 50; then color=$YELLOW
+    else color=$DIM
     fi
-    pad=$(( maxlen - ${#label} ))
-    printf "${color}%s%*s${RESET}  %s%%  ${color}%s${RESET}\n" "$label" "$pad" "" "$pf" "$bar"
+    echo "${color}${BOLD}${label}${RESET}${color} — $(describe "$key" "${norm_score[$key]}")${RESET}"
   done
 
-  local W=${sorted_keys[0]} S=${sorted_keys[1]} T=${sorted_keys[2]}
+  # Найденные инструменты и особенности (уникальные, в порядке по убыванию классов)
+  local all="" found
+  for key in "${sorted_keys[@]}"; do
+    [[ -n "${reasons[$key]}" ]] && all+="${reasons[$key]}, "
+  done
+  found=$(printf '%s' "$all" | sed 's/, /\n/g' \
+            | awk 'NF && !seen[$0]++ { printf "%s%s", sep, $0; sep=" · " }')
   echo
-  echo "${BOLD}${GREEN}▶ Ты — ${LABEL[$W]}${RESET}"
-  echo "  $(describe "$W" "${norm_score[$W]}")"
-  echo "${BOLD}Что повлияло:${RESET} ${DIM}${reasons[$W]}${RESET}"
-  echo
-  echo "${DIM}  2. ${LABEL[$S]} (${norm_score[$S]}%) — ${reasons[$S]:-—}${RESET}"
-  echo "${DIM}  3. ${LABEL[$T]} (${norm_score[$T]}%) — ${reasons[$T]:-—}${RESET}"
+  echo "${BOLD}Найдено в системе:${RESET}"
+  echo "${DIM}  ${found}${RESET}"
   echo
 }
 
