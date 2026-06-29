@@ -116,7 +116,7 @@ _changelog_since() {
 # y → обновить и перезапуститься; n → больше не предлагать до ручного обновления.
 _offer_update() {
   local remote_ver=$1
-  printf 'Доступна новая версия lxprofile: %s (у вас %s).\n' "$remote_ver" "$LXPROFILE_VERSION"
+  printf 'Доступна новая версия: \033[31m%s\033[0m -> \033[32m%s\033[0m\n' "$LXPROFILE_VERSION" "$remote_ver"
   _changelog_since "$LXPROFILE_VERSION"
   printf 'Обновить сейчас? [y/N] '
   local ans=""
