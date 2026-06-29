@@ -457,6 +457,23 @@ if [[ -f /proc/modules ]] && grep -q nvidia /proc/modules 2>/dev/null; then
   add gamer 6 "NVIDIA GPU"
 fi
 
+# Каталог Games/Игры (без учёта регистра) — сюда кладут игры, которые ставят
+# не классически: TLauncher/Minecraft, War Thunder, репаки и т.п.
+GAMES_DIR=""
+for _gd in "${HOME:-}"/[Gg][Aa][Mm][Ee][Ss] "${HOME:-}"/[Ии][Гг][Рр][Ыы]; do
+  [[ -d $_gd ]] && { GAMES_DIR=$_gd; break; }
+done
+if [[ -n $GAMES_DIR ]]; then
+  GAMES_N=$(find "$GAMES_DIR" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
+  if   safe_ge "$GAMES_N" 5; then add gamer 12 "каталог $(basename "$GAMES_DIR") (${GAMES_N} шт.)"
+  elif safe_ge "$GAMES_N" 1; then add gamer 8  "каталог $(basename "$GAMES_DIR") (${GAMES_N} шт.)"
+  fi
+  # Известные «неклассические» игры/лаунчеры внутри
+  _games_list=$(find "$GAMES_DIR" -maxdepth 3 2>/dev/null)
+  grep -qiE 'tlauncher|minecraft|\.minecraft|launcher\.jar' <<< "$_games_list" && add gamer 4 "Minecraft/TLauncher"
+  grep -qiE 'war.?thunder|aces(\.exe)?|warthunder' <<< "$_games_list" && add gamer 4 "War Thunder"
+fi
+
 # ──────────────────────────────────────────────
 # Shell
 # ──────────────────────────────────────────────

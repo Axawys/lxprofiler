@@ -56,11 +56,37 @@ _remote_version() {
   git -C "$LXPROFILE_ROOT" show "origin/$branch:lib/version.sh" 2>/dev/null | _extract_version
 }
 
+# Печатает записи changelog для всех версий новее $1 (вашей) из CHANGELOG.md
+# в репозитории. Origin уже обновлён предыдущим fetch'ем.
+_changelog_since() {
+  local current=$1 branch text line ver inblock=0 any=0
+  branch=$(git -C "$LXPROFILE_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  [[ -z $branch || $branch == HEAD ]] && branch=main
+  text=$(git -C "$LXPROFILE_ROOT" show "origin/$branch:CHANGELOG.md" 2>/dev/null) || return 0
+  [[ -z $text ]] && return 0
+  while IFS= read -r line; do
+    if [[ $line =~ ^##[[:space:]]+v?([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+      ver=${BASH_REMATCH[1]}
+      if _version_gt "$ver" "$current"; then
+        inblock=1
+        (( any == 0 )) && printf 'Что нового:\n'
+        any=1
+        printf '  %s:\n' "$ver"
+      else
+        inblock=0
+      fi
+    elif (( inblock )) && [[ -n ${line//[[:space:]]/} ]]; then
+      printf '    %s\n' "$line"
+    fi
+  done <<< "$text"
+}
+
 # Предлагает обновиться до версии $1.
 # y → обновить и перезапуститься; n → больше не предлагать до ручного обновления.
 _offer_update() {
   local remote_ver=$1
   printf 'Доступна новая версия lxprofile: %s (у вас %s).\n' "$remote_ver" "$LXPROFILE_VERSION"
+  _changelog_since "$LXPROFILE_VERSION"
   printf 'Обновить сейчас? [y/N] '
   local ans=""
   read -r ans </dev/tty 2>/dev/null || ans=""
