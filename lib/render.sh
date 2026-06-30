@@ -114,17 +114,15 @@ print_static() {
   echo "  ${DIM}╶─────────────────╴${RESET}"
   echo
 
-  # Мини-рассказ: описания всех архетипов по убыванию заполненности
-  local key label color
+  # Мини-рассказ: только описания всех архетипов по убыванию, без названий
+  # классов; скрытые классы не маскируются — их описания идут наравне со всеми.
+  local key color
   for key in "${sorted_keys[@]}"; do
-    label="${LABEL[$key]}"
-    if [[ -n "${MYSTERY[$key]:-}" ]]; then
-      color=$DIM; label=$(mask_label "$label")   # таинственные — имя закрыто
-    elif safe_ge "${norm_score[$key]}" 80; then color=$GREEN
+    if   safe_ge "${norm_score[$key]}" 80; then color=$GREEN
     elif safe_ge "${norm_score[$key]}" 50; then color=$YELLOW
     else color=$DIM
     fi
-    echo "${color}${BOLD}${label}${RESET}${color} — $(describe "$key" "${norm_score[$key]}")${RESET}"
+    echo "${color}$(describe "$key" "${norm_score[$key]}")${RESET}"
   done
 
   # Найденные инструменты и особенности (уникальные, в порядке по убыванию классов)

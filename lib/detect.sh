@@ -75,7 +75,7 @@ case "$DISTRO_ALL" in
   *Zorin*)       add ricer 8 "Zorin OS" ;;
   *Mint*)        add minimalist 6 "Linux Mint"; add sysadmin 4 "консерватизм" ;;
   *MX\ *|*MX_*)  add old_hacker 12 "MX Linux"; add sysadmin 4 "antiX-корни" ;;
-  *Ubuntu*)      add programmer 8 "Ubuntu"; add devops 4 "стандарт индустрии" ;;
+  *Ubuntu*)      add devops 4 "стандарт индустрии" ;;
   *Debian*)      add old_hacker 10 "Debian"; add sysadmin 10 "стабильность серверов" ;;
   # ── Security-ориентированные ──
   *Kali*)        add pentester 18 "Kali Linux"; add anonymous 6 "арсенал аудита" ;;
