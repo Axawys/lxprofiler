@@ -8,6 +8,58 @@
 # ручным обновлением (do_update). Содержит версию, от которой отказались.
 LXPROFILE_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/lxprofiler"
 LXPROFILE_DECLINED_FILE="$LXPROFILE_STATE_DIR/update_declined"
+LXPROFILE_LX_MARKER="$LXPROFILE_STATE_DIR/lx_setup_done"
+
+# Занята ли короткая команда lx? $1 — путь нашего будущего симлинка.
+# Занятой считаем: чужой бинарник/симлинк в PATH (не указывающий на наш lxprofile)
+# ИЛИ алиас/функция lx в shell-конфигах (их command -v из скрипта не видит).
+_lx_taken() {
+  local link=$1 found tgt our f
+  our=$(readlink -f "$LXPROFILE_ROOT/lxprofile" 2>/dev/null)
+  found=$(command -v lx 2>/dev/null || true)
+  if [[ -n $found && $found != "$link" ]]; then
+    tgt=$(readlink -f "$found" 2>/dev/null)
+    [[ $tgt != "$our" ]] && return 0   # чужая команда lx
+  fi
+  for f in "${HOME:-}/.bashrc" "${HOME:-}/.bash_aliases" "${HOME:-}/.zshrc" \
+           "${HOME:-}/.zsh_aliases" "${HOME:-}/.aliases" "${HOME:-}/.profile" \
+           "${HOME:-}/.config/fish/config.fish"; do
+    [[ -r $f ]] || continue
+    grep -qiE '^[[:space:]]*alias[[:space:]]+lx[[:space:]]*=|^[[:space:]]*alias[[:space:]]+lx[[:space:]]+|(^|[[:space:]])function[[:space:]]+lx([[:space:]]|\(|$)|(^|[[:space:]])lx[[:space:]]*\(\)' "$f" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# Создаёт короткую команду lx (симлинк на lxprofile), если она свободна.
+# Дорогая часть выполняется один раз (маркер LXPROFILE_LX_MARKER); $1=force —
+# перепроверить принудительно (вызывается при установке и обновлении).
+ensure_lx() {
+  local force="${1:-}" marker="$LXPROFILE_LX_MARKER"
+  [[ -z $force && -e $marker ]] && return 0
+  mkdir -p "$LXPROFILE_STATE_DIR" 2>/dev/null
+
+  local lxp bin link our tgt
+  lxp=$(command -v lxprofile 2>/dev/null)
+  if [[ -n $lxp ]]; then bin=$(dirname "$lxp"); else bin="${LXPROFILE_BIN:-${HOME:-}/.local/bin}"; fi
+  link="$bin/lx"
+  our=$(readlink -f "$LXPROFILE_ROOT/lxprofile" 2>/dev/null)
+
+  # уже наш симлинк lx — ничего не делаем
+  if [[ -L $link ]]; then
+    tgt=$(readlink -f "$link" 2>/dev/null)
+    [[ $tgt == "$our" ]] && { : >"$marker" 2>/dev/null; return 0; }
+  fi
+
+  if _lx_taken "$link"; then
+    [[ -e $marker ]] || printf 'Короткая команда lx уже занята — используйте lxprofile.\n' >&2
+  else
+    mkdir -p "$bin" 2>/dev/null
+    if ln -sf "$LXPROFILE_ROOT/lxprofile" "$link" 2>/dev/null; then
+      [[ -e $marker ]] || printf 'Создана короткая команда: lx (= lxprofile).\n' >&2
+    fi
+  fi
+  : >"$marker" 2>/dev/null
+}
 
 # Достаёт номер версии из текста lib/version.sh (с stdin)
 _extract_version() {
@@ -69,6 +121,8 @@ do_update() {
   rm -f "$LXPROFILE_DECLINED_FILE" 2>/dev/null
   # Перечитываем версию после обновления
   source "$LXPROFILE_LIB/version.sh"
+  # Перепроверяем короткую команду lx (вдруг освободилась/установка переехала)
+  ensure_lx force
   printf 'Готово. Текущая версия: %s\n' "$LXPROFILE_VERSION"
 }
 

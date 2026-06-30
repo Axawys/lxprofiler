@@ -44,6 +44,12 @@ chmod +x "$INSTALL_DIR/lxprofile"
 ln -sf "$INSTALL_DIR/lxprofile" "$BIN_DIR/lxprofile"
 ok "Команда lxprofile установлена → $BIN_DIR/lxprofile"
 
+# Короткая команда lx — создаём, если она свободна (логика в lib/update.sh)
+LXPROFILE_ROOT="$INSTALL_DIR" LXPROFILE_BIN="$BIN_DIR"
+source "$INSTALL_DIR/lib/update.sh"
+ensure_lx force || true
+[[ -L "$BIN_DIR/lx" ]] && ok "Короткая команда: lx → $BIN_DIR/lx"
+
 # Проверяем, что BIN_DIR в PATH
 case ":$PATH:" in
   *":$BIN_DIR:"*)

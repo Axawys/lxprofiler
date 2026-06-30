@@ -15,10 +15,11 @@ curl -fsSL https://raw.githubusercontent.com/Axawys/lxprofiler/main/install.sh |
 ```
 
 Скрипт клонирует репозиторий в `~/.local/share/lxprofiler` и создаёт команду
-`lxprofile` в `~/.local/bin`. После этого профайлер запускается из любого места:
+`lxprofile` в `~/.local/bin`, а также короткую команду `lx` — если она не занята
+другой командой или алиасом. После этого профайлер запускается из любого места:
 
 ```bash
-lxprofile
+lxprofile   # или короткое: lx
 ```
 
 > Запуск чужих скриптов из сети — на ваш страх и риск; при желании сначала

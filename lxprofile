@@ -93,6 +93,14 @@ do_remove() {
   # Симлинк, найденный в PATH (если отличается от стандартного)
   in_path=$(command -v lxprofile 2>/dev/null || true)
 
+  # Короткая команда lx — удаляем только если это НАШ симлинк
+  local our lx_link="" cand
+  our=$(readlink -f "$LXPROFILE_ROOT/lxprofile" 2>/dev/null)
+  for cand in "${LXPROFILE_BIN:-$HOME/.local/bin}/lx" "$(command -v lx 2>/dev/null || true)"; do
+    [[ -n $cand && -L $cand ]] || continue
+    [[ "$(readlink -f "$cand" 2>/dev/null)" == "$our" ]] && { lx_link=$cand; break; }
+  done
+
   # Каталог установки удаляем только если это стандартное место install.sh —
   # чтобы случайно не снести dev-чекаут репозитория.
   if [[ "$LXPROFILE_ROOT" == "$install_default" \
@@ -104,6 +112,7 @@ do_remove() {
   [[ -L $bin_link || -e $bin_link ]]            && printf '  • симлинк   %s\n' "$bin_link"
   [[ -n $in_path && -L $in_path && $in_path != "$bin_link" ]] \
                                                 && printf '  • симлинк   %s\n' "$in_path"
+  [[ -n $lx_link ]]                             && printf '  • симлинк   %s (lx)\n' "$lx_link"
   [[ -d $LXPROFILE_STATE_DIR ]]                 && printf '  • состояние %s\n' "$LXPROFILE_STATE_DIR"
   if [[ -n $remove_dir ]]; then
     printf '  • каталог   %s\n' "$remove_dir"
@@ -121,6 +130,7 @@ do_remove() {
 
   rm -f "$bin_link" 2>/dev/null
   [[ -n $in_path && -L $in_path && $in_path != "$bin_link" ]] && rm -f "$in_path" 2>/dev/null
+  [[ -n $lx_link ]] && rm -f "$lx_link" 2>/dev/null
   rm -rf "$LXPROFILE_STATE_DIR" 2>/dev/null
   if [[ -n $remove_dir ]]; then
     rm -rf "$remove_dir" 2>/dev/null
@@ -145,6 +155,9 @@ case "${1:-}" in
     exit 1
     ;;
 esac
+
+# Короткая команда lx: разовая проверка/создание (закешировано маркером)
+ensure_lx
 
 # ──────────────────────────────────────────────
 # Проверка обновлений стартует В ФОНЕ — чтобы утилита открывалась сразу,
