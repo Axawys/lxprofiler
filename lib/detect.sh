@@ -43,6 +43,23 @@ fi
 DISTRO_ALL="${DISTRO} ${DISTRO_ID} ${DISTRO_LIKE}"
 
 case "$DISTRO_ALL" in
+  # ── Дистрибутивы для пентеста/безопасности → Хацкер / Анонимус ──
+  #    (выше семейств, чтобы Arch/Gentoo/Ubuntu-основа не перехватила раньше)
+  *Kali*)                              add pentester 18 "Kali Linux"; add anonymous 6 "арсенал аудита" ;;
+  *Parrot*)                            add pentester 16 "Parrot OS"; add anonymous 10 "приватность + аудит" ;;
+  *BlackArch*|*blackarch*)             add pentester 18 "BlackArch"; add anonymous 4 "арсенал аудита" ;;
+  *ArchStrike*|*archstrike*)           add pentester 16 "ArchStrike" ;;
+  *Pentoo*|*pentoo*)                   add pentester 18 "Pentoo"; add old_hacker 4 "Gentoo-основа" ;;
+  *BackBox*|*backbox*)                 add pentester 16 "BackBox" ;;
+  *Athena*|*athena*)                   add pentester 16 "Athena OS" ;;
+  *Wifislax*|*wifislax*)               add pentester 14 "Wifislax (Wi-Fi аудит)" ;;
+  *Samurai*|*samurai*)                 add pentester 12 "Samurai WTF" ;;
+  *CAINE*|*Caine*|*caine*)             add pentester 12 "CAINE (форензика)" ;;
+  *"Network Security Toolkit"*)        add pentester 12 "Network Security Toolkit" ;;
+  *"Security Lab"*|*"Security Spin"*)  add pentester 12 "Fedora Security Lab"; add fresh_witness 6 "Fedora" ;;
+  *Tails*)                             add anonymous 20 "Tails" ;;
+  *Qubes*)                             add anonymous 16 "Qubes OS"; add pentester 6 "изоляция по доменам" ;;
+  *Whonix*)                            add anonymous 18 "Whonix" ;;
   # ── Отечественные ──
   *Astra*|*astra*)             add import_substituted 28 "Astra Linux"; add sysadmin 6 "корпоративная ОС"; add anonymous 4 "мандатный доступ" ;;
   *RED\ OS*|*RedOS*|*redos*)   add import_substituted 28 "RED OS"; add sysadmin 6 "серверная ОС" ;;
@@ -56,7 +73,7 @@ case "$DISTRO_ALL" in
   *Artix*)       add old_hacker 12 "Artix (без systemd)"; add minimalist 4 "выбор init" ;;
   *EndeavourOS*) add old_hacker 8 "EndeavourOS"; add fresh_witness 6 "близко к Arch (rolling)" ;;
   *Manjaro*)     add fresh_witness 5 "Manjaro (rolling)"; add minimalist 4 "удобный Arch" ;;
-  *Arch*)        add old_hacker 8 "Arch Linux"; add fresh_witness 6 "rolling-release"; add programmer 4 "контроль над окружением" ;;
+  *Arch*)        add old_hacker 8 "Arch Linux"; add fresh_witness 6 "rolling-release" ;;
   # ── Атомарные / иммутабельные ──
   *Bazzite*)                        add atomic 12 "Bazzite (атомарная)"; add gamer 12 "Bazzite" ;;
   *Silverblue*|*Kinoite*|*Sericea*) add atomic 14 "атомарная Fedora"; add fresh_witness 8 "immutable" ;;
@@ -68,25 +85,19 @@ case "$DISTRO_ALL" in
   *Endless*)                        add atomic 8 "Endless OS"; add minimalist 4 "из коробки" ;;
   # ── Fedora / игровые ──
   *Nobara*)      add gamer 12 "Nobara"; add fresh_witness 6 "Fedora для игр" ;;
-  *Fedora*)      add fresh_witness 12 "Fedora"; add programmer 8 "свежий инструментарий" ;;
+  *Fedora*)      add fresh_witness 12 "Fedora" ;;
   # ── Debian / Ubuntu семейство ──
-  *Pop\!_OS*)    add gamer 10 "Pop!_OS"; add programmer 5 "удобство из коробки" ;;
+  *Pop\!_OS*)    add gamer 10 "Pop!_OS" ;;
   *elementary*)  add ricer 12 "elementary OS" ;;
   *Zorin*)       add ricer 8 "Zorin OS" ;;
   *Mint*)        add minimalist 6 "Linux Mint"; add sysadmin 4 "консерватизм" ;;
   *MX\ *|*MX_*)  add old_hacker 12 "MX Linux"; add sysadmin 4 "antiX-корни" ;;
   *Ubuntu*)      add devops 4 "стандарт индустрии" ;;
   *Debian*)      add old_hacker 10 "Debian"; add sysadmin 10 "стабильность серверов" ;;
-  # ── Security-ориентированные ──
-  *Kali*)        add pentester 18 "Kali Linux"; add anonymous 6 "арсенал аудита" ;;
-  *Parrot*)      add pentester 16 "Parrot OS"; add anonymous 10 "приватность + аудит" ;;
-  *Tails*)       add anonymous 20 "Tails" ;;
-  *Qubes*)       add anonymous 16 "Qubes OS"; add pentester 6 "изоляция по доменам" ;;
-  *Whonix*)      add anonymous 18 "Whonix" ;;
   # ── Инженерные / нишевые ──
   *openSUSE*)    add sysadmin 10 "openSUSE/YaST"; add devops 6 "корпоративный баланс" ;;
   *NixOS*)       add atomic 14 "NixOS (декларативная)"; add fresh_witness 8 "NixOS"; add old_hacker 4 "тинкеринг" ;;
-  *Gentoo*)      add old_hacker 14 "Gentoo"; add programmer 5 "сборка из исходников" ;;
+  *Gentoo*)      add old_hacker 14 "Gentoo" ;;
   *Slackware*)   add old_hacker 16 "Slackware"; add minimalist 5 "классика" ;;
   *Void*)        add old_hacker 12 "Void Linux"; add minimalist 8 "runit" ;;
   *Alpine*)      add minimalist 15 "Alpine"; add sysadmin 6 "musl + busybox"; add anonymous 4 "малая поверхность атаки" ;;
