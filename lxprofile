@@ -61,6 +61,7 @@ lxprofile — Linux Psychological Profiler
   в пайпе или не-TTY — статической сводкой.
 
 ОПЦИИ:
+  -s, --static          статическая сводка вместо интерактивного режима
   -u, --update          обновить lxprofile с GitHub
   -c, --changes [ВЕР]   changelog: указанной версии или 5 последних
       --rm, --remove    удалить lxprofile из системы
@@ -129,12 +130,14 @@ do_remove() {
   fi
 }
 
+FORCE_STATIC=""
 case "${1:-}" in
   -v|--version) print_version; exit 0 ;;
   -h|--help)    print_help;    exit 0 ;;
   -u|--update)  do_update;     exit $? ;;
   -c|--changes) do_changes "${2:-}"; exit $? ;;
   --rm|--remove) do_remove;    exit $? ;;
+  -s|--static)  FORCE_STATIC=1 ;;  # принудительно статическая сводка
   "")           : ;;  # без аргументов — запускаем профайлер
   *)
     printf 'Неизвестный аргумент: %s\n\n' "$1" >&2
@@ -146,8 +149,9 @@ esac
 # ──────────────────────────────────────────────
 # Проверка обновлений стартует В ФОНЕ — чтобы утилита открывалась сразу,
 # а уведомление о новой версии показывалось уже после закрытия просмотра.
+# В статическом режиме проверку не запускаем (некому показать уведомление).
 # ──────────────────────────────────────────────
-start_update_check
+[[ -z $FORCE_STATIC ]] && start_update_check
 
 # ──────────────────────────────────────────────
 # Движок: данные → утилиты → анализ → отрисовка
@@ -164,9 +168,9 @@ source "$LXPROFILE_LIB/render.sh"
 # Точка входа
 # В настоящем терминале — интерактивный режим; для пайпа — статическая сводка.
 # tput не обязателен: при его отсутствии render.sh использует ANSI-escape
-# (важно для Termux без пакета ncurses). Исключаем только не-TTY и TERM=dumb.
+# (важно для Termux без пакета ncurses). Исключаем не-TTY, TERM=dumb и -s/--static.
 # ──────────────────────────────────────────────
-if [[ -t 0 && -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
+if [[ -z $FORCE_STATIC && -t 0 && -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
   interactive_view
   # interactive_view снимает свои trap'ы — возвращаем обработчик прерывания
   trap _interrupt INT TERM
