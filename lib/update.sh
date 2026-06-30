@@ -10,54 +10,65 @@ LXPROFILE_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/lxprofiler"
 LXPROFILE_DECLINED_FILE="$LXPROFILE_STATE_DIR/update_declined"
 LXPROFILE_LX_MARKER="$LXPROFILE_STATE_DIR/lx_setup_done"
 
-# Занята ли короткая команда lx? $1 — путь нашего будущего симлинка.
-# Занятой считаем: чужой бинарник/симлинк в PATH (не указывающий на наш lxprofile)
-# ИЛИ алиас/функция lx в shell-конфигах (их command -v из скрипта не видит).
-_lx_taken() {
-  local link=$1 found tgt our f
+# Короткие команды: lx (= lxprofile) и её «слитные» формы с флагом.
+# lxu == lx -u, lxs == lx -s, lxv == lx -v, lxh == lx -h, lxc == lx -c,
+# lxrm == lx --rm (разбор имени вызова — в точке входа lxprofile).
+LXPROFILE_SHORT_CMDS=(lx lxu lxs lxv lxh lxc lxrm)
+
+# Занято ли короткое имя $1? $2 — путь нашего будущего симлинка.
+# Занятым считаем: чужой бинарник/симлинк в PATH (не указывающий на наш lxprofile)
+# ИЛИ алиас/функция с этим именем в shell-конфигах (их command -v из скрипта не видит).
+_short_taken() {
+  local name=$1 link=$2 found tgt our f re
   our=$(readlink -f "$LXPROFILE_ROOT/lxprofile" 2>/dev/null)
-  found=$(command -v lx 2>/dev/null || true)
+  found=$(command -v "$name" 2>/dev/null || true)
   if [[ -n $found && $found != "$link" ]]; then
     tgt=$(readlink -f "$found" 2>/dev/null)
-    [[ $tgt != "$our" ]] && return 0   # чужая команда lx
+    [[ $tgt != "$our" ]] && return 0   # чужая команда с таким именем
   fi
+  re="^[[:space:]]*alias[[:space:]]+${name}[[:space:]]*=|^[[:space:]]*alias[[:space:]]+${name}[[:space:]]+|(^|[[:space:]])function[[:space:]]+${name}([[:space:]]|\\(|\$)|(^|[[:space:]])${name}[[:space:]]*\\(\\)"
   for f in "${HOME:-}/.bashrc" "${HOME:-}/.bash_aliases" "${HOME:-}/.zshrc" \
            "${HOME:-}/.zsh_aliases" "${HOME:-}/.aliases" "${HOME:-}/.profile" \
            "${HOME:-}/.config/fish/config.fish"; do
     [[ -r $f ]] || continue
-    grep -qiE '^[[:space:]]*alias[[:space:]]+lx[[:space:]]*=|^[[:space:]]*alias[[:space:]]+lx[[:space:]]+|(^|[[:space:]])function[[:space:]]+lx([[:space:]]|\(|$)|(^|[[:space:]])lx[[:space:]]*\(\)' "$f" 2>/dev/null && return 0
+    grep -qiE "$re" "$f" 2>/dev/null && return 0
   done
   return 1
 }
 
-# Создаёт короткую команду lx (симлинк на lxprofile), если она свободна.
-# Дорогая часть выполняется один раз (маркер LXPROFILE_LX_MARKER); $1=force —
-# перепроверить принудительно (вызывается при установке и обновлении).
+# Создаёт короткие команды (симлинки на lxprofile) для каждого свободного имени
+# из LXPROFILE_SHORT_CMDS. Дорогая часть выполняется один раз (маркер
+# LXPROFILE_LX_MARKER); $1=force — перепроверить принудительно (при установке
+# и обновлении). Сообщения печатаются только про основную команду lx.
 ensure_lx() {
   local force="${1:-}" marker="$LXPROFILE_LX_MARKER"
   [[ -z $force && -e $marker ]] && return 0
   mkdir -p "$LXPROFILE_STATE_DIR" 2>/dev/null
 
-  local lxp bin link our tgt
+  local lxp bin name link our tgt verbose=""
+  [[ -e $marker ]] || verbose=1
   lxp=$(command -v lxprofile 2>/dev/null)
   if [[ -n $lxp ]]; then bin=$(dirname "$lxp"); else bin="${LXPROFILE_BIN:-${HOME:-}/.local/bin}"; fi
-  link="$bin/lx"
   our=$(readlink -f "$LXPROFILE_ROOT/lxprofile" 2>/dev/null)
 
-  # уже наш симлинк lx — ничего не делаем
-  if [[ -L $link ]]; then
-    tgt=$(readlink -f "$link" 2>/dev/null)
-    [[ $tgt == "$our" ]] && { : >"$marker" 2>/dev/null; return 0; }
-  fi
+  for name in "${LXPROFILE_SHORT_CMDS[@]}"; do
+    link="$bin/$name"
 
-  if _lx_taken "$link"; then
-    [[ -e $marker ]] || printf 'Короткая команда lx уже занята — используйте lxprofile.\n' >&2
-  else
-    mkdir -p "$bin" 2>/dev/null
-    if ln -sf "$LXPROFILE_ROOT/lxprofile" "$link" 2>/dev/null; then
-      [[ -e $marker ]] || printf 'Создана короткая команда: lx (= lxprofile).\n' >&2
+    # уже наш симлинк — ничего не делаем
+    if [[ -L $link ]]; then
+      tgt=$(readlink -f "$link" 2>/dev/null)
+      [[ $tgt == "$our" ]] && continue
     fi
-  fi
+
+    if _short_taken "$name" "$link"; then
+      [[ $name == lx && -n $verbose ]] && printf 'Короткая команда lx уже занята — используйте lxprofile.\n' >&2
+    else
+      mkdir -p "$bin" 2>/dev/null
+      if ln -sf "$LXPROFILE_ROOT/lxprofile" "$link" 2>/dev/null; then
+        [[ $name == lx && -n $verbose ]] && printf 'Создана короткая команда: lx (= lxprofile) и слитные формы lxu/lxs/lxc…\n' >&2
+      fi
+    fi
+  done
   : >"$marker" 2>/dev/null
 }
 

@@ -48,7 +48,7 @@ ok "Команда lxprofile установлена → $BIN_DIR/lxprofile"
 LXPROFILE_ROOT="$INSTALL_DIR" LXPROFILE_BIN="$BIN_DIR"
 source "$INSTALL_DIR/lib/update.sh"
 ensure_lx force || true
-[[ -L "$BIN_DIR/lx" ]] && ok "Короткая команда: lx → $BIN_DIR/lx"
+[[ -L "$BIN_DIR/lx" ]] && ok "Короткая команда: lx (= lxprofile); слитные формы: lxu, lxs, lxc…"
 
 # Проверяем, что BIN_DIR в PATH
 case ":$PATH:" in

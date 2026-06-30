@@ -68,6 +68,9 @@ lxprofile — Linux Psychological Profiler
   -v, --version         показать версию
   -h, --help            показать эту справку
 
+  Флаги можно писать без дефиса (lx u, lx static) и слитно с короткой
+  командой lx (lxu = lx u = lx -u; так же lxs, lxv, lxh, lxc, lxrm).
+
 УПРАВЛЕНИЕ (интерактивный режим):
   ↑, k                  листать вверх
   ↓, j                  листать вниз
@@ -93,12 +96,16 @@ do_remove() {
   # Симлинк, найденный в PATH (если отличается от стандартного)
   in_path=$(command -v lxprofile 2>/dev/null || true)
 
-  # Короткая команда lx — удаляем только если это НАШ симлинк
-  local our lx_link="" cand
+  # Короткие команды (lx и слитные формы) — удаляем только НАШИ симлинки
+  local our name cand
+  local short_links=()
   our=$(readlink -f "$LXPROFILE_ROOT/lxprofile" 2>/dev/null)
-  for cand in "${LXPROFILE_BIN:-$HOME/.local/bin}/lx" "$(command -v lx 2>/dev/null || true)"; do
-    [[ -n $cand && -L $cand ]] || continue
-    [[ "$(readlink -f "$cand" 2>/dev/null)" == "$our" ]] && { lx_link=$cand; break; }
+  for name in "${LXPROFILE_SHORT_CMDS[@]}"; do
+    for cand in "${LXPROFILE_BIN:-$HOME/.local/bin}/$name" "$(command -v "$name" 2>/dev/null || true)"; do
+      [[ -n $cand && -L $cand ]] || continue
+      [[ "$(readlink -f "$cand" 2>/dev/null)" == "$our" ]] || continue
+      case " ${short_links[*]} " in *" $cand "*) ;; *) short_links+=("$cand") ;; esac
+    done
   done
 
   # Каталог установки удаляем только если это стандартное место install.sh —
@@ -112,7 +119,7 @@ do_remove() {
   [[ -L $bin_link || -e $bin_link ]]            && printf '  • симлинк   %s\n' "$bin_link"
   [[ -n $in_path && -L $in_path && $in_path != "$bin_link" ]] \
                                                 && printf '  • симлинк   %s\n' "$in_path"
-  [[ -n $lx_link ]]                             && printf '  • симлинк   %s (lx)\n' "$lx_link"
+  for cand in ${short_links[@]+"${short_links[@]}"}; do printf '  • симлинк   %s (%s)\n' "$cand" "$(basename "$cand")"; done
   [[ -d $LXPROFILE_STATE_DIR ]]                 && printf '  • состояние %s\n' "$LXPROFILE_STATE_DIR"
   if [[ -n $remove_dir ]]; then
     printf '  • каталог   %s\n' "$remove_dir"
@@ -130,7 +137,7 @@ do_remove() {
 
   rm -f "$bin_link" 2>/dev/null
   [[ -n $in_path && -L $in_path && $in_path != "$bin_link" ]] && rm -f "$in_path" 2>/dev/null
-  [[ -n $lx_link ]] && rm -f "$lx_link" 2>/dev/null
+  for cand in ${short_links[@]+"${short_links[@]}"}; do rm -f "$cand" 2>/dev/null; done
   rm -rf "$LXPROFILE_STATE_DIR" 2>/dev/null
   if [[ -n $remove_dir ]]; then
     rm -rf "$remove_dir" 2>/dev/null
@@ -140,15 +147,29 @@ do_remove() {
   fi
 }
 
+# Слитная форма короткой команды: lxu == lx -u, lxc == lx -c и т.д.
+# Имя, которым вызвали скрипт (симлинки создаёт ensure_lx), превращаем во флаг —
+# дальше его разбирает общий case. Доп. аргументы (напр. версия для -c) остаются.
+case "$(basename "${0:-}")" in
+  lxu)  set -- -u  "$@" ;;
+  lxs)  set -- -s  "$@" ;;
+  lxv)  set -- -v  "$@" ;;
+  lxh)  set -- -h  "$@" ;;
+  lxc)  set -- -c  "$@" ;;
+  lxrm) set -- --rm "$@" ;;
+esac
+
+# Флаги принимаются в трёх видах: с дефисом (-u/--update), без дефиса (u/update)
+# и слитно с командой lx (lxu) — формы равнозначны.
 FORCE_STATIC=""
 case "${1:-}" in
-  -v|--version) print_version; exit 0 ;;
-  -h|--help)    print_help;    exit 0 ;;
-  -u|--update)  do_update;     exit $? ;;
-  -c|--changes) do_changes "${2:-}"; exit $? ;;
-  --rm|--remove) do_remove;    exit $? ;;
-  -s|--static)  FORCE_STATIC=1 ;;  # принудительно статическая сводка
-  "")           : ;;  # без аргументов — запускаем профайлер
+  -v|--version|v|version)   print_version;       exit 0 ;;
+  -h|--help|h|help)         print_help;          exit 0 ;;
+  -u|--update|u|update)     do_update;           exit $? ;;
+  -c|--changes|c|changes)   do_changes "${2:-}"; exit $? ;;
+  --rm|--remove|rm|remove)  do_remove;           exit $? ;;
+  -s|--static|s|static)     FORCE_STATIC=1 ;;  # принудительно статическая сводка
+  "")                       : ;;  # без аргументов — запускаем профайлер
   *)
     printf 'Неизвестный аргумент: %s\n\n' "$1" >&2
     print_help >&2
