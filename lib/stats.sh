@@ -4,6 +4,7 @@
 # ── Режим «Забавная статистика» ────────────────────────────────
 STATS_OK=0
 TOTAL_CMDS=0; UNIQ_CMDS=0; TOP_CMD=""; TOP_CNT=0
+TOP_CMDS=(); TOP_CNTS=()
 FF_COUNT=0; SUDO_COUNT=0; UPD_COUNT=0; RMRF_COUNT=0; TYPO_COUNT=0
 VIM_COUNT=0; NVIM_COUNT=0; NANO_COUNT=0; EMACS_COUNT=0; MICRO_COUNT=0; SPAN_SEC=0
 HIST_DEDUP=0
@@ -49,7 +50,7 @@ freq() {   # count → интервал по охвату истории
 }
 
 compute_stats() {
-  local raw ts tsmin tsmax topline
+  local raw ts tsmin tsmax _cnt _cmd
   raw=$(
     { [[ -r ~/.bash_history ]] && grep -av '^#' ~/.bash_history
       [[ -r ~/.zsh_history  ]] && sed -E 's/^: [0-9]+:[0-9]+;//' ~/.zsh_history
@@ -63,9 +64,13 @@ compute_stats() {
   STATS_OK=1
 
   UNIQ_CMDS=$(sort -u <<< "$CMD_LIST" | grep -c .)
-  topline=$(sort <<< "$CMD_LIST" | uniq -c | sort -rn | head -1)
-  TOP_CNT=$(awk '{print $1}' <<< "$topline")
-  TOP_CMD=$(awk '{print $2}' <<< "$topline")
+  # Топ-3 самых частых команд
+  TOP_CMDS=(); TOP_CNTS=()
+  while read -r _cnt _cmd; do
+    [[ -z $_cmd ]] && continue
+    TOP_CNTS+=("$_cnt"); TOP_CMDS+=("$_cmd")
+  done < <(sort <<< "$CMD_LIST" | uniq -c | sort -rn | head -3)
+  TOP_CNT=${TOP_CNTS[0]:-0}; TOP_CMD=${TOP_CMDS[0]:-?}
 
   FF_COUNT=$(grep -cxE "${FF_MATCH_RE:-fastfetch|neofetch|screenfetch|pfetch|hyfetch}" <<< "$CMD_LIST")
   SUDO_COUNT=$(awk '{print $1}' <<< "$raw" | grep -cxE 'sudo|doas')
@@ -206,7 +211,10 @@ render_stats() {
   local span_d=$(( SPAN_SEC / 86400 ))
   printf '%s\n' "  В истории ${BOLD}${TOTAL_CMDS}${RESET} команд, ${BOLD}${UNIQ_CMDS}${RESET} уникальных${DIM} (охват ~${span_d} дн.)${RESET}"
   printf '\n'
-  printf '%s\n' "  Любимая команда: ${BOLD}${GREEN}${TOP_CMD}${RESET} — ${BOLD}${TOP_CNT}×${RESET} ${DIM}($(freq "$TOP_CNT")) — $(_top_quip)${RESET}"
+  printf '%s\n' "  Любимые команды:"
+  printf '%s\n' "    1. ${BOLD}${GREEN}${TOP_CMDS[0]}${RESET} — ${BOLD}${TOP_CNTS[0]}×${RESET} ${DIM}($(freq "${TOP_CNTS[0]}")) — $(_top_quip)${RESET}"
+  [[ -n ${TOP_CMDS[1]:-} ]] && printf '%s\n' "    2. ${BOLD}${TOP_CMDS[1]}${RESET} — ${BOLD}${TOP_CNTS[1]}×${RESET} ${DIM}($(freq "${TOP_CNTS[1]}"))${RESET}"
+  [[ -n ${TOP_CMDS[2]:-} ]] && printf '%s\n' "    3. ${BOLD}${TOP_CMDS[2]}${RESET} — ${BOLD}${TOP_CNTS[2]}×${RESET} ${DIM}($(freq "${TOP_CNTS[2]}"))${RESET}"
   printf '%s\n' "  fastfetch/neofetch${FF_ALIAS_LABEL}: ${BOLD}${FF_COUNT}×${RESET} ${DIM}($(freq "$FF_COUNT")) — $(_ff_quip)${RESET}"
   printf '%s\n' "  Обновления: ${BOLD}${UPD_COUNT}×${RESET} ${DIM}($(freq "$UPD_COUNT")) — $(_upd_quip)${RESET}"
   printf '%s\n' "  sudo/doas: ${BOLD}${SUDO_COUNT}×${RESET} ${DIM}($(freq "$SUDO_COUNT")) — $(_sudo_quip)${RESET}"
