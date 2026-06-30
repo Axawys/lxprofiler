@@ -238,7 +238,7 @@ MODE_NAME="список"
 
 # Циклическое перелистывание режимов (для m и vim-style h/l)
 MODES=(list compass stats)
-MODE_NAMES=(список компас статистика)
+MODE_NAMES=(список "линуксоидные координаты" статистика)
 MODE_IDX=0
 cycle_mode() {   # $1 = +1 (вперёд) / -1 (назад)
   local n=${#MODES[@]}

@@ -59,7 +59,7 @@ compass_quadrant() {   # CX CY → название квадранта
 # ── Режим «Координаты» (линуксоидный компас) ───────────────────
 render_compass() {
   local sel=$1
-  render_header "Линуксоидный компас"
+  render_header "Линуксоидные координаты"
 
   local GW=49 GH=15 cols rows
   cols=$(t_cols)
