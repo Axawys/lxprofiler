@@ -1,0 +1,236 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/Axawys/lxprofiler/internal/detect"
+)
+
+var (
+	boldStyle  = lipgloss.NewStyle().Bold(true)
+	dimStyle   = lipgloss.NewStyle().Faint(true)
+	greenStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	cyanStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	redStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+)
+
+type Mode int
+
+const (
+	ListMode Mode = iota
+	CompassMode
+	StatsMode
+)
+
+var modeNames = []string{"список", "линуксоидные координаты", "статистика"}
+
+type Model struct {
+	selected int
+	mode     Mode
+	results  []detect.ArchetypeResult
+	width    int
+	height   int
+	reqW     int // минимальная ширина терминала, чтобы всё поместилось
+	reqH     int // минимальная высота терминала
+}
+
+func NewModel(results []detect.ArchetypeResult) Model {
+	m := Model{selected: 0, results: results}
+	m.reqW, m.reqH = computeRequiredSize(results)
+	return m
+}
+
+// computeRequiredSize считает минимальный размер терминала, при котором ни один
+// из режимов (список / координаты / статистика) не обрезается. Считается один
+// раз при создании модели: набор классов фиксирован, так что размер не меняется.
+func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
+	// Ширина строки списка: "▶ " + метка + добивка + "  100%  " + бар(20).
+	maxLabel := 0
+	for _, r := range results {
+		if w := lipgloss.Width(r.Label); w > maxLabel {
+			maxLabel = w
+		}
+	}
+	reqW := 2 + maxLabel + 2 + 3 + 1 + 2 + 20
+	if reqW < 48 { // пол для разделителя/шапки
+		reqW = 48
+	}
+
+	// Координаты и статистика по ширине не переносятся — берём их натуральную
+	// ширину, отрисовав на заведомо большом «холсте».
+	big := Model{results: results, width: 400, height: 400}
+	big.mode = CompassMode
+	compassView := renderCompass(big)
+	big.mode = StatsMode
+	statsView := renderStats(big)
+	for _, v := range []string{compassView, statsView} {
+		if w := maxLineWidth(v); w > reqW {
+			reqW = w
+		}
+	}
+
+	// Высота: максимум по режимам. У списка высота зависит от переноса описания
+	// и «что повлияло», а те переносятся по ширине reqW — берём худший класс.
+	reqH := lineCount(compassView)
+	if h := lineCount(statsView); h > reqH {
+		reqH = h
+	}
+	lm := Model{results: results, mode: ListMode, width: reqW, height: 400}
+	if len(results) == 0 {
+		if h := lineCount(renderList(lm)); h > reqH {
+			reqH = h
+		}
+	}
+	for sel := range results {
+		lm.selected = sel
+		if h := lineCount(renderList(lm)); h > reqH {
+			reqH = h
+		}
+	}
+	return reqW, reqH
+}
+
+func maxLineWidth(s string) int {
+	max := 0
+	for _, line := range strings.Split(s, "\n") {
+		if w := lipgloss.Width(line); w > max {
+			max = w
+		}
+	}
+	return max
+}
+
+func lineCount(s string) int { return strings.Count(s, "\n") + 1 }
+
+func (m Model) Init() tea.Cmd {
+	return nil
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", "Q", "й", "Й":
+			return m, tea.Quit
+		case "j", "о", "down":
+			if m.selected < len(m.results)-1 {
+				m.selected++
+			}
+		case "k", "л", "up":
+			if m.selected > 0 {
+				m.selected--
+			}
+		case "g", "п":
+			m.selected = 0
+		case "G", "П":
+			m.selected = len(m.results) - 1
+		case "m", "M", "ь", "Ь", "l", "д", "right":
+			m.mode = (m.mode + 1) % 3
+		case "h", "р", "left":
+			m.mode = (m.mode + 2) % 3
+		}
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+	}
+	return m, nil
+}
+
+func (m Model) View() string {
+	// Пока не пришёл первый WindowSizeMsg — не мигаем сообщением «0×0».
+	if m.width == 0 && m.height == 0 {
+		return ""
+	}
+	if m.width < m.reqW || m.height < m.reqH {
+		return tooSmallView(m)
+	}
+	switch m.mode {
+	case CompassMode:
+		return renderCompass(m)
+	case StatsMode:
+		return renderStats(m)
+	default:
+		return renderList(m)
+	}
+}
+
+// tooSmallView показывается, когда терминал меньше требуемого. При ресайзе окна
+// bubbletea перерисует View, и как только размер дорастёт — покажется утилита.
+func tooSmallView(m Model) string {
+	curW := greenStyle
+	if m.width < m.reqW {
+		curW = redStyle
+	}
+	curH := greenStyle
+	if m.height < m.reqH {
+		curH = redStyle
+	}
+	cur := curW.Render(fmt.Sprintf("%d", m.width)) +
+		dimStyle.Render("×") + curH.Render(fmt.Sprintf("%d", m.height))
+
+	lines := []string{
+		boldStyle.Render("🐧 Окно слишком маленькое"),
+		"",
+		fmt.Sprintf("Нужно: %s", greenStyle.Render(fmt.Sprintf("%d×%d", m.reqW, m.reqH))),
+		fmt.Sprintf("Сейчас: %s", cur),
+		"",
+		dimStyle.Render("Увеличьте окно · q — выход"),
+	}
+	block := strings.Join(lines, "\n")
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, block)
+}
+
+func makeBar(pct int, width int) string {
+	if pct < 0 {
+		return makeBrokenBar(width)
+	}
+	filled := pct * width / 100
+	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+}
+
+// makeBrokenBar рисует «сломанную» полоску ширины width рун (не байт!).
+// Прежняя версия резала многобайтовые руны по байтам (pattern[:width-1]),
+// из-за чего бар секретных классов ломался в кракозябры.
+func makeBrokenBar(width int) string {
+	if width <= 0 {
+		return ""
+	}
+	glyphs := []rune("█▒ █░▓ ░▒█ ░ ▓█░ ▓")
+	var b strings.Builder
+	for i := 0; i < width-1; i++ {
+		b.WriteRune(glyphs[i%len(glyphs)])
+	}
+	b.WriteRune('?')
+	return b.String()
+}
+
+func maskLabel(label string) string {
+	return strings.Repeat("?", len([]rune(label)))
+}
+
+func wrapText(text string, width int) string {
+	if width <= 0 {
+		width = 72
+	}
+	words := strings.Fields(text)
+	var lines []string
+	current := ""
+	for _, word := range words {
+		if current == "" {
+			current = word
+		} else if len(current)+1+len(word) > width {
+			lines = append(lines, current)
+			current = word
+		} else {
+			current += " " + word
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return strings.Join(lines, "\n")
+}
