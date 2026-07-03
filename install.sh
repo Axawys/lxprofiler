@@ -59,7 +59,8 @@ migrate_from_bash
 # ── ОС и архитектура → имя ассета ──────────────────────────────
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$os" in
-  linux|darwin) : ;;
+  linux) : ;;
+  darwin) err "macOS не поддерживается: сборки выпускаются только под Linux."; exit 1 ;;
   *) err "неподдерживаемая ОС: $os"; exit 1 ;;
 esac
 

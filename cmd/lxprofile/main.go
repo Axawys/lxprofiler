@@ -15,7 +15,7 @@ import (
 
 // Version — версия сборки. По умолчанию для локальной сборки; на релизе
 // подставляется линкером: go build -ldflags "-X main.Version=X.Y.Z".
-var Version = "5.3.1"
+var Version = "5.3.2"
 
 func main() {
 	args := os.Args[1:]
@@ -116,12 +116,16 @@ func argAt(args []string, i int) string {
 	return ""
 }
 
+// isatty → true, только если и ввод, и вывод — терминал: при `lx > файл`
+// или `lx | less` нужен статический режим, а не escape-коды TUI в пайпе.
 func isatty() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
+	for _, f := range []*os.File{os.Stdin, os.Stdout} {
+		fi, err := f.Stat()
+		if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+			return false
+		}
 	}
-	return fi.Mode()&os.ModeCharDevice != 0
+	return true
 }
 
 func printVersion() {

@@ -36,7 +36,6 @@ var Labels = map[string]string{
 	"modeler3d":           "3D-моделлер",
 	"writer":              "Писатель",
 	"streamer":            "Стример",
-	"veteran":             "Ветеран",
 	"embedded":            "Embedded-разработчик",
 }
 
@@ -48,7 +47,7 @@ var Hidden = map[string]bool{
 	"console_life": true, "package_freak": true,
 	"musician": true, "photographer": true, "video_editor": true,
 	"modeler3d": true, "writer": true, "streamer": true,
-	"veteran": true, "embedded": true,
+	"embedded": true,
 }
 
 var Mystery = map[string]bool{
@@ -91,7 +90,6 @@ var DescHigh = map[string]string{
 	"modeler3d":          "Принтер жужжит третий час, а ты все двигаешь один вертекс.",
 	"writer":             "Word не открывал с института. Зачем, если можно три часа настраивать поля в LaTeX.",
 	"streamer":           "Я на стриме? Привет зретелям.",
-	"veteran":            "Твоему железу больше лет, чем некоторым мейнтейнерам. И оно всё ещё грузится.",
 	"embedded":           "Прошил — не работает. Прошил — не работает. И так до победы.",
 }
 
@@ -131,7 +129,6 @@ var DescMid = map[string]string{
 	"modeler3d":          "Ты создаёшь 3D-модели — Blender/FreeCAD привычны, принтер настроен.",
 	"writer":             "Ты пишешь документы — LaTeX/pandoc привычны, шаблоны настроены.",
 	"streamer":           "Ты стримишь — OBS настроен, аудио сведено, сцены готовы.",
-	"veteran":            "Ты на старом железе — оно работает, зачем менять?",
 	"embedded":           "Ты программируешь железо — ESP32/STM32 привычны, отладка через UART.",
 }
 
@@ -171,7 +168,6 @@ var DescLow = map[string]string{
 	"modeler3d":          "Blender есть, но пока простые модели.",
 	"writer":             "LaTeX/pandoc есть, но шаблоны дефолтные.",
 	"streamer":           "OBS есть, но стримишь редко.",
-	"veteran":            "Старое железо есть, но пока работает.",
 	"embedded":           "ESP32/STM32 пробовал, но проекты простые.",
 }
 
@@ -211,7 +207,6 @@ var DescNone = map[string]string{
 	"modeler3d":          "3D-моделирование не твоя стихия — принтер есть, но ПО нет.",
 	"writer":             "Писание не твоя стихия — клавиатура есть, но ПО нет.",
 	"streamer":           "Стриминг не твоя стихия — камера есть, но ПО нет.",
-	"veteran":            "Старое железо не твоя стихия — ты за новизну.",
 	"embedded":           "Embedded не твоя стихия — ты за готовые решения.",
 }
 

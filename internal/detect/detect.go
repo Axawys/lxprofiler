@@ -113,7 +113,6 @@ func Detect() {
 	detectModeler3d()
 	detectWriter()
 	detectStreamer()
-	detectVeteran()
 	detectEmbedded()
 	analyzeBehavior()
 }
@@ -456,9 +455,21 @@ func detectLegacy() {
 			Add("legacy", 4, "ядро 5.x (не самое свежее)")
 		}
 	}
+	is32 := false
 	arch, _ := exec.Command("uname", "-m").Output()
 	switch strings.TrimSpace(string(arch)) {
 	case "i386", "i486", "i586", "i686":
+		is32 = true
+	}
+	if !is32 {
+		// 32-битный CPU при нестандартном uname (напр. 32-битный userland).
+		if d, err := os.ReadFile("/proc/cpuinfo"); err == nil {
+			for _, m := range []string{"i386", "i486", "i586", "i686"} {
+				if strings.Contains(string(d), m) { is32 = true; break }
+			}
+		}
+	}
+	if is32 {
 		Add("legacy", 12, "32-битная система")
 	}
 	session := os.Getenv("XDG_SESSION_TYPE")
@@ -1060,6 +1071,9 @@ func Normalize() []ArchetypeResult {
 	for key := range Score {
 		if data.Mystery[key] || key == "normis" { continue }
 		normScore[key] = Score[key] * 100 / maxScore
+		// Скрытые классы нормализуются по максимуму видимых и могут его
+		// превысить — без ограничения makeBar уйдёт в отрицательный Repeat.
+		if normScore[key] > 100 { normScore[key] = 100 }
 	}
 	if maxScore <= 12 { normScore["normis"] = 100
 	} else if maxScore >= 40 { normScore["normis"] = 0
@@ -1102,7 +1116,11 @@ func detectVirtualizer() {
 	score := 0
 	// Docker
 	if Has("docker") { score += 3 }
-	if Has("docker-compose") || Has("docker compose") { score += 2 }
+	// Compose v2 — не бинарник в PATH, а cli-плагин docker.
+	if Has("docker-compose") ||
+		fileExists("/usr/lib/docker/cli-plugins/docker-compose") ||
+		fileExists("/usr/libexec/docker/cli-plugins/docker-compose") ||
+		fileExists(home+"/.docker/cli-plugins/docker-compose") { score += 2 }
 	// Podman
 	if Has("podman") { score += 3 }
 	if Has("podman-compose") { score += 2 }
@@ -1135,7 +1153,8 @@ func detectTiling() {
 	// WM detection
 	if strings.Contains(desktop, "i3") || Has("i3") { score += 4 }
 	if strings.Contains(desktop, "sway") || Has("sway") { score += 4 }
-	if strings.Contains(desktop, "hyprland") || Has("hyprland") { score += 4 }
+	// Бинарник и XDG_CURRENT_DESKTOP у Hyprland — с большой буквы.
+	if strings.Contains(desktop, "Hyprland") || strings.Contains(desktop, "hyprland") || Has("Hyprland") { score += 4 }
 	if strings.Contains(desktop, "bspwm") || Has("bspwm") { score += 3 }
 	if strings.Contains(desktop, "dwm") || Has("dwm") { score += 3 }
 	if strings.Contains(desktop, "xmonad") || Has("xmonad") { score += 3 }
@@ -1239,7 +1258,7 @@ func detectWaylandWafer() {
 	if session == "wayland" { score += 3 }
 	// Wayland compositors
 	if Has("sway") { score += 3 }
-	if Has("hyprland") { score += 3 }
+	if Has("Hyprland") { score += 3 }
 	if Has("river") { score += 3 }
 	if Has("niri") { score += 3 }
 	// Wayland tools
@@ -1248,7 +1267,6 @@ func detectWaylandWafer() {
 	if Has("rofi") { score += 1 }
 	if Has("wlogout") { score += 2 }
 	if Has("swaylock") { score += 2 }
-	if Has("wlroots") { score += 2 }
 	if Has("mako") { score += 2 }
 	if Has("dunst") { score += 1 }
 	if Has("foot") { score += 2 }
@@ -1373,7 +1391,6 @@ func detectPhotographer() {
 	if Has("gimp") { score += 2 }
 	if Has("krita") { score += 2 }
 	if Has("shotwell") { score += 2 }
-	if Has("digiKam") { score += 3 }
 	// RAW processing
 	if Has("dcraw") { score += 2 }
 	if Has("exiftool") { score += 1 }
@@ -1406,8 +1423,8 @@ func detectModeler3d() {
 	if Has("freecad") { score += 4 }
 	if Has("openscad") { score += 3 }
 	if Has("solvespace") { score += 3 }
-	if Has("bambu-studio") || Has("bambu-studio") { score += 3 }
-	if Has("prusa-slicer") || Has("prusa-slicer") { score += 3 }
+	if Has("bambu-studio") { score += 3 }
+	if Has("prusa-slicer") { score += 3 }
 	if Has("cura") { score += 3 }
 	if Has("slic3r") { score += 3 }
 	if Has("orca-slicer") { score += 3 }
@@ -1429,7 +1446,7 @@ func detectWriter() {
 	if Has("calibre") { score += 2 }
 	if Has("hledger") { score += 2 }
 	if Has("ledger") { score += 2 }
-	if Has(" typst") { score += 3 }
+	if Has("typst") { score += 3 }
 	if Has("quarto") { score += 2 }
 	if score >= 5 {
 		Add("writer", score, fmt.Sprintf("тексты (score: %d)", score))
@@ -1445,55 +1462,12 @@ func detectStreamer() {
 	if Has("pulseaudio") { score += 1 }
 	if Has("pipewire") { score += 1 }
 	if Has("wireplumber") { score += 1 }
-	if Has("v4l2loopback") { score += 2 }
+	// v4l2loopback — модуль ядра, ищем его среди загруженных, а не в PATH.
+	if fileExists("/sys/module/v4l2loopback") { score += 2 }
 	if Has("xdotool") { score += 1 }
 	if Has("xprop") { score += 1 }
 	if score >= 5 {
 		Add("streamer", score, fmt.Sprintf("стримы (score: %d)", score))
-	}
-}
-
-func detectVeteran() {
-	score := 0
-	// Old hardware indicators
-	if _, err := os.Stat("/proc/cpuinfo"); err == nil {
-		d, _ := os.ReadFile("/proc/cpuinfo")
-		content := string(d)
-		if strings.Contains(content, "i386") || strings.Contains(content, "i486") || strings.Contains(content, "i586") || strings.Contains(content, "i686") {
-			score += 5
-		}
-	}
-	// Old kernel
-	kver := ""
-	if out, err := exec.Command("uname", "-r").Output(); err == nil {
-		kver = strings.TrimSpace(string(out))
-	}
-	parts := strings.Split(kver, ".")
-	if len(parts) > 0 {
-		major := 0
-		fmt.Sscanf(parts[0], "%d", &major)
-		if major > 0 && major <= 4 { score += 5 }
-		if major == 5 { score += 2 }
-	}
-	// X11
-	if os.Getenv("XDG_SESSION_TYPE") == "x11" { score += 2 }
-	// Ancient DE/WM
-	desktop := os.Getenv("XDG_CURRENT_DESKTOP") + "|" + os.Getenv("DESKTOP_SESSION")
-	if strings.Contains(desktop, "Trinity") || strings.Contains(desktop, "TDE") { score += 5 }
-	if strings.Contains(desktop, "fvwm") || strings.Contains(desktop, "FVWM") { score += 4 }
-	if strings.Contains(desktop, "icewm") || strings.Contains(desktop, "IceWM") { score += 4 }
-	if strings.Contains(desktop, "twm") || strings.Contains(desktop, "cwm") { score += 4 }
-	// Legacy software
-	if Has("mplayer") && !Has("mpv") { score += 2 }
-	if Has("pidgin") { score += 2 }
-	if Has("xmms") || Has("audacious") { score += 1 }
-	// 32-bit
-	arch, _ := exec.Command("uname", "-m").Output()
-	switch strings.TrimSpace(string(arch)) {
-	case "i386", "i486", "i586", "i686": score += 5
-	}
-	if score >= 6 {
-		Add("veteran", score, fmt.Sprintf("легаси (score: %d)", score))
 	}
 }
 

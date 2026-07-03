@@ -329,6 +329,8 @@ func computeStatsRaw() StatsResult {
 	result.BrowserCache["Opera"] = cacheKB(cache+"/opera", varApp+"/com.opera.Opera/cache")
 	result.BrowserCache["Edge"] = cacheKB(cache+"/microsoft-edge", varApp+"/com.microsoft.Edge/cache")
 	result.BrowserCache["LibreWolf"] = cacheKB(cache+"/librewolf", varApp+"/io.gitlab.librewolf-community/cache")
+	result.BrowserCache["Waterfox"] = cacheKB(cache+"/waterfox", varApp+"/net.waterfox.waterfox/cache")
+	result.BrowserCache["Zen"] = cacheKB(cache+"/zen", varApp+"/app.zen_browser.zen/cache")
 	result.BrowserCache["Yandex"] = cacheKB(cache+"/yandex-browser", varApp+"/ru.yandex.Browser/cache")
 	result.BrowserCache["qutebrowser"] = cacheKB(cache+"/qutebrowser", varApp+"/org.qutebrowser.qutebrowser/cache")
 

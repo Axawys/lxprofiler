@@ -24,8 +24,8 @@ func TestDescribe(t *testing.T) {
 }
 
 func TestLabels(t *testing.T) {
-	if len(Labels) != 37 {
-		t.Errorf("Labels has %d entries, want 37", len(Labels))
+	if len(Labels) != 36 {
+		t.Errorf("Labels has %d entries, want 36", len(Labels))
 	}
 	if Labels["devops"] != "DevOps" {
 		t.Errorf("Labels[devops] = %q, want %q", Labels["devops"], "DevOps")
