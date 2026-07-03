@@ -110,15 +110,6 @@ func TestEditorCounts(t *testing.T) {
 	}
 }
 
-func TestTopQuip(t *testing.T) {
-	if topQuip(1000000, 10) != "заходит нечасто" {
-		t.Error("topQuip with large interval should be 'заходит нечасто'")
-	}
-	if topQuip(1000000, 100) != "крепкая привычка" {
-		t.Error("topQuip with medium interval should be 'крепкая привычка'")
-	}
-}
-
 func TestFreq(t *testing.T) {
 	if freq(0, 1000) != "—" {
 		t.Error("freq with 0 count should be '—'")

@@ -201,10 +201,9 @@ func makeBrokenBar(width int) string {
 	}
 	glyphs := []rune("█▒ █░▓ ░▒█ ░ ▓█░ ▓")
 	var b strings.Builder
-	for i := 0; i < width-1; i++ {
+	for i := 0; i < width; i++ {
 		b.WriteRune(glyphs[i%len(glyphs)])
 	}
-	b.WriteRune('?')
 	return b.String()
 }
 
@@ -220,12 +219,16 @@ func wrapText(text string, width int) string {
 	var lines []string
 	current := ""
 	for _, word := range words {
-		if current == "" {
+		// Ширина считается по видимым символам (lipgloss.Width), а не байтам —
+		// иначе кириллица (2 байта/символ) переносится вдвое раньше, текст не
+		// доходит до правой рамки и занимает лишние строки.
+		switch {
+		case current == "":
 			current = word
-		} else if len(current)+1+len(word) > width {
+		case lipgloss.Width(current)+1+lipgloss.Width(word) > width:
 			lines = append(lines, current)
 			current = word
-		} else {
+		default:
 			current += " " + word
 		}
 	}

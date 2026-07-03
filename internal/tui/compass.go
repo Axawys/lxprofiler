@@ -87,9 +87,6 @@ func renderCompass(m Model) string {
 	var sb strings.Builder
 	compass := ComputeCompass()
 
-	sb.WriteString(boldStyle.Render("  🐧 Линуксоидные координаты"))
-	sb.WriteString("\n\n")
-
 	gw := 49
 	gh := 15
 	if gw > m.width-4 {

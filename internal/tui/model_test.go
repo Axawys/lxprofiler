@@ -14,9 +14,6 @@ func TestMakeBrokenBarRuneWidth(t *testing.T) {
 		if n := utf8.RuneCountInString(bar); n != w {
 			t.Errorf("makeBrokenBar(%d): got %d runes, want %d (%q)", w, n, w, bar)
 		}
-		if !strings.HasSuffix(bar, "?") {
-			t.Errorf("makeBrokenBar(%d): should end with '?', got %q", w, bar)
-		}
 		if strings.ContainsRune(bar, utf8.RuneError) {
 			t.Errorf("makeBrokenBar(%d): contains broken rune (byte-slicing bug): %q", w, bar)
 		}
@@ -72,8 +69,9 @@ func TestViewGate(t *testing.T) {
 	if strings.Contains(v, "слишком") {
 		t.Errorf("large enough terminal should NOT show the too-small message")
 	}
-	if !strings.Contains(v, "Профиль архетипов") {
-		t.Errorf("large enough terminal should render the list")
+	// в режиме списка всегда есть полоска заполнения (символ бара)
+	if !strings.Contains(v, "█") {
+		t.Errorf("large enough terminal should render the list (progress bars)")
 	}
 
 	// нулевой размер (до первого WindowSizeMsg) — пусто, без мигания

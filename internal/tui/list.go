@@ -10,14 +10,18 @@ import (
 func renderList(m Model) string {
 	var sb strings.Builder
 
-	sb.WriteString(boldStyle.Render("  🐧 Профиль архетипов"))
-	sb.WriteString("\n\n")
-
 	maxLen := 0
 	for _, r := range m.results {
 		if len([]rune(r.Label)) > maxLen {
 			maxLen = len([]rune(r.Label))
 		}
+	}
+
+	// Полоска тянется до правого края: ширина окна минус префикс строки
+	// ("▶ " + метка + добивка + "  100%  "). Минимум 20, чтобы не схлопывалась.
+	barW := m.width - (maxLen + 10)
+	if barW < 20 {
+		barW = 20
 	}
 
 	for i, r := range m.results {
@@ -29,7 +33,7 @@ func renderList(m Model) string {
 			pct = -1
 		}
 
-		bar := makeBar(pct, 20)
+		bar := makeBar(pct, barW)
 		pad := maxLen - len([]rune(label))
 
 		var pf string
@@ -50,7 +54,7 @@ func renderList(m Model) string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(dimStyle.Render("  ────────────────────────────────────────────"))
+	sb.WriteString(dimStyle.Render(strings.Repeat("─", m.width)))
 	sb.WriteString("\n")
 
 	if m.selected < len(m.results) {
@@ -60,7 +64,7 @@ func renderList(m Model) string {
 
 		desc := data.Describe(r.Key, r.NormScore)
 		sb.WriteString("  " + wrapText(desc, m.width-4))
-		sb.WriteString("\n\n")
+		sb.WriteString("\n")
 
 		sb.WriteString(boldStyle.Render("  Что повлияло:"))
 		sb.WriteString("\n")

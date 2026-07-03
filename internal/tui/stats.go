@@ -95,6 +95,167 @@ func computeStats() StatsResult {
 	return statsCached
 }
 
+// typos — распространённые опечатки команд (учитываются по первому слову).
+var typos = map[string]bool{
+	"sl": true, "gti": true, "claer": true, "clera": true, "grpe": true,
+	"grep-": true, "gerp": true, "mkdri": true, "pythno": true, "cd..": true,
+	"cd...": true, "ecoh": true, "sudp": true, "suod": true, "vin": true,
+	"whcih": true, "cta": true, "nvin": true, "lls": true, "sl-": true,
+}
+
+// updatePatterns — подстроки команд обновления для разных дистрибутивов.
+var updatePatterns = []string{
+	"pacman -s", "yay -s", "paru -s", "apt update", "apt upgrade",
+	"apt-get update", "apt-get upgrade", "dnf update", "dnf upgrade",
+	"zypper up", "zypper dup", "emerge -u", "emerge --sync", "nixos-rebuild",
+	"nix-channel --update", "flatpak update", "xbps-install -su", "apk upgrade",
+}
+
+// fetchTools — базовые команды-«фечи» (вывод инфы о системе).
+var fetchTools = map[string]bool{
+	"fastfetch": true, "neofetch": true, "screenfetch": true, "pfetch": true,
+	"hyfetch": true, "macchina": true, "nerdfetch": true, "ufetch": true,
+	"paleofetch": true, "cpufetch": true,
+}
+
+// aliasRe разбирает объявления alias/abbr: имя и значение (bash/zsh/fish).
+var aliasRe = regexp.MustCompile(`(?i)^\s*(?:alias|abbr)(?:\s+-\S+)*\s+([\w.-]+)\s*=?\s*(.*)$`)
+
+// fetchAliasNames возвращает имена алиасов/abbr, разрешающихся в fetch-инструмент.
+func fetchAliasNames(configText string) []string {
+	var names []string
+	for _, line := range strings.Split(configText, "\n") {
+		m := aliasRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		name := strings.ToLower(strings.TrimSpace(m[1]))
+		value := strings.ToLower(strings.Trim(strings.TrimSpace(m[2]), `'"`))
+		for _, w := range strings.FieldsFunc(value, func(r rune) bool {
+			return strings.ContainsRune(" \t|&;\"'", r)
+		}) {
+			if fetchTools[w] {
+				names = append(names, name)
+				break
+			}
+		}
+	}
+	return names
+}
+
+// fetchAliases читает конфиги шелла и собирает алиасы, ведущие на fetch-инструмент.
+func fetchAliases() map[string]bool {
+	set := map[string]bool{}
+	home := os.Getenv("HOME")
+	if home == "" {
+		home = "/root"
+	}
+	for _, f := range []string{
+		"/.bashrc", "/.bash_aliases", "/.zshrc", "/.zsh_aliases", "/.aliases",
+		"/.profile", "/.config/fish/config.fish",
+	} {
+		data, err := os.ReadFile(home + f)
+		if err != nil {
+			continue
+		}
+		for _, name := range fetchAliasNames(string(data)) {
+			set[name] = true
+		}
+	}
+	return set
+}
+
+// extractCommand достаёт саму команду из строки истории любого шелла:
+// zsh extended (": <ts>:<dur>;cmd"), fish ("- cmd: cmd"), bash/zsh plain ("cmd").
+// Служебные строки (fish when:/paths:, bash-таймстампы #<ts>) отбрасываются.
+func extractCommand(line string) string {
+	line = strings.TrimRight(line, "\r")
+	if strings.HasPrefix(line, "#") {
+		if _, err := strconv.Atoi(strings.TrimSpace(line[1:])); err == nil {
+			return "" // bash HISTTIMEFORMAT: строка "#1609459200"
+		}
+	}
+	if strings.HasPrefix(line, ": ") {
+		if i := strings.IndexByte(line, ';'); i >= 0 {
+			return strings.TrimSpace(line[i+1:]) // zsh extended history
+		}
+	}
+	if strings.HasPrefix(line, "- cmd: ") {
+		return strings.TrimSpace(line[len("- cmd: "):]) // fish
+	}
+	if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "- ") {
+		return "" // служебные строки fish
+	}
+	return strings.TrimSpace(line)
+}
+
+// tallyCommands считает все счётчики истории по списку команд (первое слово
+// команды, sudo/doas «прозрачны»). Вынесено отдельно, чтобы логика была
+// тестируемой без чтения файлов.
+func tallyCommands(commands []string, fetchAlias map[string]bool, result *StatsResult) {
+	result.TotalCmds = len(commands)
+	if result.TotalCmds == 0 {
+		return
+	}
+	result.HasHistory = true
+
+	cmdCount := map[string]int{}
+	seen := map[string]bool{}
+	for _, c := range commands {
+		fields := strings.Fields(c)
+		if len(fields) == 0 {
+			continue
+		}
+		head := strings.ToLower(fields[0])
+		if head == "sudo" || head == "doas" {
+			result.SudoCount++
+		}
+		word := head
+		if (head == "sudo" || head == "doas") && len(fields) > 1 {
+			word = strings.ToLower(fields[1])
+		}
+		cmdCount[word]++
+		seen[word] = true
+		switch word {
+		case "vim", "vi":
+			result.VimCount++
+		case "nvim":
+			result.NvimCount++
+		case "nano":
+			result.NanoCount++
+		case "emacs":
+			result.EmacsCount++
+		case "micro":
+			result.MicroCount++
+		}
+		if typos[word] {
+			result.TypoCount++
+		}
+		// fetch-инструмент напрямую или через алиас (ff → fastfetch)
+		if fetchTools[word] || fetchAlias[word] {
+			result.FFCount++
+		}
+	}
+	result.UniqueCmds = len(seen)
+
+	for cmd, count := range cmdCount {
+		result.TopCmds = append(result.TopCmds, CmdCount{Cmd: cmd, Count: count})
+	}
+	sort.Slice(result.TopCmds, func(i, j int) bool {
+		return result.TopCmds[i].Count > result.TopCmds[j].Count
+	})
+	if len(result.TopCmds) > 3 {
+		result.TopCmds = result.TopCmds[:3]
+	}
+
+	// Подстрочные счётчики — по тексту команд (без метаданных истории).
+	cmdText := strings.ToLower(strings.Join(commands, "\n"))
+	result.RMRFCount = strings.Count(cmdText, "rm -rf")
+	for _, p := range updatePatterns {
+		result.UpdCount += strings.Count(cmdText, p)
+	}
+}
+
 func computeStatsRaw() StatsResult {
 	home := os.Getenv("HOME")
 	if home == "" {
@@ -120,66 +281,18 @@ func computeStatsRaw() StatsResult {
 		return result
 	}
 
-	// Parse commands
-	cmdList := ""
+	// Достаём реальные команды из истории (с учётом форматов zsh/fish/bash)
+	// и считаем по ним все счётчики.
+	var commands []string
 	for _, line := range strings.Split(raw, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		cmd := fields[0]
-		if (cmd == "sudo" || cmd == "doas") && len(fields) > 1 {
-			cmd = fields[1]
-		}
-		if cmd != "" {
-			cmdList += cmd + "\n"
-			result.TotalCmds++
+		if c := extractCommand(line); c != "" {
+			commands = append(commands, c)
 		}
 	}
-
-	if result.TotalCmds == 0 {
+	tallyCommands(commands, fetchAliases(), &result)
+	if !result.HasHistory {
 		return result
 	}
-
-	result.HasHistory = true
-
-	// Unique commands
-	seen := map[string]bool{}
-	for _, cmd := range strings.Split(cmdList, "\n") {
-		if cmd != "" {
-			seen[cmd] = true
-		}
-	}
-	result.UniqueCmds = len(seen)
-
-	// Top commands
-	cmdCount := map[string]int{}
-	for _, cmd := range strings.Split(cmdList, "\n") {
-		if cmd != "" {
-			cmdCount[cmd]++
-		}
-	}
-	for cmd, count := range cmdCount {
-		result.TopCmds = append(result.TopCmds, CmdCount{Cmd: cmd, Count: count})
-	}
-	sort.Slice(result.TopCmds, func(i, j int) bool {
-		return result.TopCmds[i].Count > result.TopCmds[j].Count
-	})
-	if len(result.TopCmds) > 3 {
-		result.TopCmds = result.TopCmds[:3]
-	}
-
-	// Specific counts
-	lower := strings.ToLower(raw)
-	result.FFCount = strings.Count(lower, "fastfetch") + strings.Count(lower, "neofetch")
-	result.SudoCount = strings.Count(lower, "sudo") + strings.Count(lower, "doas")
-	result.UpdCount = strings.Count(lower, "pacman -S") + strings.Count(lower, "apt update")
-	result.RMRFCount = strings.Count(lower, "rm -rf")
-	result.VimCount = strings.Count(lower, "\nvim\n") + strings.Count(lower, "\nvi\n")
-	result.NvimCount = strings.Count(lower, "\nnvim\n")
-	result.NanoCount = strings.Count(lower, "\nnano\n")
-	result.EmacsCount = strings.Count(lower, "\nemacs\n")
-	result.MicroCount = strings.Count(lower, "\nmicro\n")
 
 	// Time span
 	var timestamps []int
@@ -220,23 +333,6 @@ func computeStatsRaw() StatsResult {
 	result.BrowserCache["qutebrowser"] = cacheKB(cache+"/qutebrowser", varApp+"/org.qutebrowser.qutebrowser/cache")
 
 	return result
-}
-
-func topQuip(spanSec, topCnt int) string {
-	if topCnt <= 0 || spanSec <= 0 {
-		return "частоту не определить"
-	}
-	i := spanSec / topCnt
-	switch {
-	case i >= 86400:
-		return "заходит нечасто"
-	case i >= 3600:
-		return "крепкая привычка"
-	case i >= 600:
-		return "мышечная память"
-	default:
-		return "набита вслепую"
-	}
 }
 
 func ffQuip(spanSec, ffCount int) string {
@@ -394,9 +490,6 @@ func browserBattleLine(browserCache map[string]int) string {
 func renderStats(m Model) string {
 	var sb strings.Builder
 
-	sb.WriteString(boldStyle.Render("  🐧 Забавная статистика"))
-	sb.WriteString("\n\n")
-
 	s := computeStats()
 
 	if !s.HasHistory {
@@ -418,11 +511,10 @@ func renderStats(m Model) string {
 	sb.WriteString("  Любимые команды:")
 	sb.WriteString("\n")
 	if len(s.TopCmds) > 0 {
-		sb.WriteString(fmt.Sprintf("    1. %s — %s× %s — %s\n",
+		sb.WriteString(fmt.Sprintf("    1. %s — %s× %s\n",
 			greenStyle.Render(s.TopCmds[0].Cmd),
 			boldStyle.Render(fmt.Sprintf("%d", s.TopCmds[0].Count)),
-			dimStyle.Render(fmt.Sprintf("(%s)", freq(s.TopCmds[0].Count, spanSec))),
-			dimStyle.Render(topQuip(spanSec, s.TopCmds[0].Count))))
+			dimStyle.Render(fmt.Sprintf("(%s)", freq(s.TopCmds[0].Count, spanSec)))))
 	}
 	if len(s.TopCmds) > 1 {
 		sb.WriteString(fmt.Sprintf("    2. %s — %s× %s\n",
