@@ -159,7 +159,7 @@ func renderCompass(m Model) string {
 
 	sb.WriteString("   " + boldStyle.Render("▼ УДОБСТВО (из коробки)"))
 	sb.WriteString("\n")
-	sb.WriteString("   " + dimStyle.Render(fmt.Sprintf("◄ новаторы%*s◄ traditions ►", gw-20, "")))
+	sb.WriteString("   " + dimStyle.Render(fmt.Sprintf("◄ новаторы%*sтрадиции ►", gw-20, "")))
 	sb.WriteString("\n\n")
 
 	sb.WriteString(fmt.Sprintf("  %s %s %s", cyanStyle.Render("●"), boldStyle.Render("ты:"), compass.Quadrant))

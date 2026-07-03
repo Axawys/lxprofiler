@@ -142,9 +142,6 @@ func ensureShortCommands(force bool) {
 	writeMarker(marker, "")
 }
 
-// currentBinDir — каталог, где лежит наш бинарник (для установки/удаления симлинков).
-func currentBinDir() string { return filepath.Dir(ourBinary()) }
-
 // dedupe removes duplicate strings preserving order.
 func dedupe(in []string) []string {
 	seen := map[string]bool{}

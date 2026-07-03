@@ -123,7 +123,7 @@ func renderList(m Model) string {
 	// прыгала бы при переупорядочивании).
 	if m.animating {
 		sb.WriteString("\n")
-		sb.WriteString(dimStyle.Render("  пробел — пропустить"))
+		sb.WriteString(dimStyle.Render("  q — выход"))
 		return sb.String()
 	}
 

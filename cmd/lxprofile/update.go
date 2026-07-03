@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,28 +43,34 @@ func versionGT(a, b string) bool {
 	return false
 }
 
-// remoteLatest узнаёт версию последнего релиза на GitHub (без префикса v).
+// remoteLatest узнаёт версию последнего релиза по редиректу веб-страницы
+// github.com/<repo>/releases/latest → .../releases/tag/vX.Y.Z. Так мы не ходим
+// в api.github.com и не упираемся в его лимит 60 запросов/час на IP (403).
 func remoteLatest() (string, error) {
-	url := "https://api.github.com/repos/" + repoSlug + "/releases/latest"
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.Header.Set("Accept", "application/vnd.github+json")
+	url := "https://github.com/" + repoSlug + "/releases/latest"
+	req, _ := http.NewRequest(http.MethodHead, url, nil)
 	req.Header.Set("User-Agent", "lxprofile")
-	client := &http.Client{Timeout: 6 * time.Second}
+	client := &http.Client{
+		Timeout: 6 * time.Second,
+		// Не следуем за редиректом — нам нужен сам заголовок Location.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub API: %s", resp.Status)
+
+	const marker = "/releases/tag/"
+	loc := resp.Header.Get("Location")
+	i := strings.LastIndex(loc, marker)
+	if i < 0 {
+		return "", fmt.Errorf("релизов ещё нет")
 	}
-	var payload struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", err
-	}
-	return strings.TrimPrefix(payload.TagName, "v"), nil
+	tag := strings.Trim(loc[i+len(marker):], "/")
+	return strings.TrimPrefix(tag, "v"), nil
 }
 
 // assetName — имя релизного бинарника под текущую ОС/архитектуру.
@@ -139,10 +144,36 @@ func selfReplace(url, exe string) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
+	// Страховка: убеждаемся, что скачался исполняемый файл, а не HTML-страница
+	// ошибки — иначе молча заменим рабочий бинарник мусором.
+	if err := checkBinaryMagic(tmpName); err != nil {
+		return err
+	}
 	if err := os.Chmod(tmpName, 0o755); err != nil {
 		return err
 	}
 	return os.Rename(tmpName, exe)
+}
+
+// checkBinaryMagic проверяет сигнатуру исполняемого файла (ELF / Mach-O).
+func checkBinaryMagic(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var magic [4]byte
+	if _, err := io.ReadFull(f, magic[:]); err != nil {
+		return fmt.Errorf("скачанный файл повреждён: %v", err)
+	}
+	switch {
+	case magic == [4]byte{0x7f, 'E', 'L', 'F'}: // Linux
+		return nil
+	case magic == [4]byte{0xcf, 0xfa, 0xed, 0xfe}, // macOS arm64/amd64
+		magic == [4]byte{0xca, 0xfe, 0xba, 0xbe}: // macOS universal
+		return nil
+	}
+	return fmt.Errorf("скачанный файл не является бинарником (получен %q…) — обновление отменено", string(magic[:]))
 }
 
 // fetchRemoteChangelog тянет CHANGELOG.md из репозитория на указанном теге.

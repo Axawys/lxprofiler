@@ -54,11 +54,24 @@ func doRemove() error {
 		return fmt.Errorf("отменено")
 	}
 
+	var failed []string
 	for _, l := range links {
-		_ = os.Remove(l)
+		if err := os.Remove(l); err != nil {
+			failed = append(failed, l)
+		}
 	}
 	_ = os.RemoveAll(state)
-	_ = os.Remove(exe)
+	if err := os.Remove(exe); err != nil {
+		failed = append(failed, exe)
+	}
+	if len(failed) > 0 {
+		fmt.Fprintln(os.Stderr, "Не удалось удалить (нет прав?):")
+		for _, f := range failed {
+			fmt.Fprintf(os.Stderr, "  %s\n", f)
+		}
+		fmt.Fprintln(os.Stderr, "Попробуйте удалить вручную или с sudo.")
+		return fmt.Errorf("удалено не всё")
+	}
 	fmt.Println("lxprofile удалён. Спасибо, что пользовались! 🐧")
 	return nil
 }

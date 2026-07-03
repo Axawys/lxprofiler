@@ -26,7 +26,6 @@ var (
 	boldStyle  = lipgloss.NewStyle().Bold(true)
 	dimStyle   = lipgloss.NewStyle().Faint(true)
 	greenStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	cyanStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	redStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 )
@@ -38,18 +37,6 @@ const (
 	CompassMode
 	StatsMode
 )
-
-var modeNames = []string{"список", "линуксоидные координаты", "статистика"}
-
-// skipKeys — клавиши, которыми можно промотать анимацию. Вертикальная навигация
-// (j/k и ↑/↓) сюда НЕ входит: пока анимация играет, эти клавиши не работают.
-// Ответы терминала (report'ы) тоже не входят, чтобы не пропускать анимацию на старте.
-var skipKeys = map[string]bool{
-	"left": true, "right": true,
-	"h": true, "l": true, "m": true, "M": true,
-	"р": true, "д": true, "ь": true, "Ь": true,
-	" ": true, "enter": true, "esc": true,
-}
 
 type Model struct {
 	selected int
@@ -158,17 +145,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, animTick()
 	case tea.KeyMsg:
 		key := msg.String()
-		// Во время анимации осмысленная клавиша её пропускает; ответы терминала
-		// (report'ы вроде позиции курсора) игнорируем, иначе анимация «промотается»
-		// сразу на старте.
+		// Пока идёт анимация, доступен только выход по q — всё остальное
+		// (навигация, смена режима, промотка) недоступно до её конца.
 		if m.animating {
 			switch key {
 			case "q", "Q", "й", "Й":
 				return m, tea.Quit
-			}
-			if skipKeys[key] {
-				m.animating = false
-				m.animProgress = 1
 			}
 			return m, nil
 		}

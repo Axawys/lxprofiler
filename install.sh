@@ -76,8 +76,10 @@ if [[ -n "${LXPROFILE_VERSION:-}" ]]; then
   tag="v${LXPROFILE_VERSION#v}"
 else
   info "Узнаю последнюю версию…"
-  tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-        | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+  # Без api.github.com (лимит 60/час): берём тег из редиректа веб-страницы
+  # github.com/<repo>/releases/latest → .../releases/tag/vX.Y.Z.
+  tag=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" \
+        | sed -nE 's#.*/releases/tag/([^/?#]+).*#\1#p')
   [[ -n "$tag" ]] || { err "не удалось узнать последнюю версию (ещё нет релизов?)."; exit 1; }
 fi
 

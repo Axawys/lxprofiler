@@ -42,7 +42,9 @@ func Used(pattern string) bool {
 	if Behavior == "" {
 		return true
 	}
-	re, err := regexp.Compile("(?i)" + pattern)
+	// \b — только целые слова (как grep -w в bash-версии): иначе `wg` матчится
+	// внутри wget, `vi` внутри vim и т.п., завышая очки.
+	re, err := regexp.Compile(`(?i)\b(?:` + pattern + `)\b`)
 	if err != nil {
 		return strings.Contains(strings.ToLower(Behavior), strings.ToLower(pattern))
 	}
@@ -64,7 +66,8 @@ func behav(pat, class, reason string, pts, threshold int) {
 	if Behavior == "" {
 		return
 	}
-	re, err := regexp.Compile("(?i)" + pat)
+	// \b — считаем только целые слова (паритет с grep -owE ... -w в bash).
+	re, err := regexp.Compile(`(?i)\b(?:` + pat + `)\b`)
 	if err != nil {
 		return
 	}
