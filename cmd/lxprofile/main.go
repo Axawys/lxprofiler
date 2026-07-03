@@ -15,7 +15,7 @@ import (
 
 // Version — версия сборки. По умолчанию для локальной сборки; на релизе
 // подставляется линкером: go build -ldflags "-X main.Version=X.Y.Z".
-var Version = "5.1.0"
+var Version = "5.2.0"
 
 func main() {
 	args := os.Args[1:]
@@ -35,9 +35,12 @@ func main() {
 		args = append([]string{"-c"}, args...)
 	case "lxrm":
 		args = append([]string{"--rm"}, args...)
+	case "lxa":
+		args = append([]string{"-a"}, args...)
 	}
 
 	forceStatic := false
+	forceAnim := false
 
 	if len(args) > 0 {
 		// Флаги принимаются с дефисом (-u/--update), без дефиса (u/update)
@@ -66,6 +69,8 @@ func main() {
 			return
 		case "s", "static":
 			forceStatic = true
+		case "a", "animate":
+			forceAnim = true
 		default:
 			fmt.Fprintf(os.Stderr, "Неизвестный аргумент: %s\n\n", args[0])
 			printHelp()
@@ -84,11 +89,15 @@ func main() {
 		return
 	}
 
+	// Анимация полосок: принудительно по флагу -a либо один раз при первом
+	// интерактивном запуске (закешировано маркером).
+	animate := forceAnim || firstRunAnimation()
+
 	// Проверка обновлений стартует в фоне — чтобы утилита открывалась сразу,
 	// а уведомление показывалось уже после закрытия просмотра.
 	updCh := startBackgroundCheck()
 
-	model := tui.NewModel(results)
+	model := tui.NewModel(results, animate)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Ошибка: %v\n", err)
@@ -169,6 +178,7 @@ func printHelp() {
 
 ОПЦИИ:
   -s, --static          статическая сводка вместо интерактивного режима
+  -a, --animate         запустить с анимацией заполнения полосок
   -u, --update [ВЕР]    обновить с GitHub (или откатиться на версию ВЕР)
   -c, --changes [ВЕР]   changelog: указанной версии или 5 последних
       --rm, --remove    удалить lxprofile из системы
@@ -176,7 +186,7 @@ func printHelp() {
   -h, --help            показать эту справку
 
   Флаги можно писать без дефиса (lx u, lx static) и слитно с короткой
-  командой lx (lxu = lx u = lx -u; так же lxs, lxv, lxh, lxc, lxrm).
+  командой lx (lxu = lx u = lx -u; так же lxs, lxa, lxv, lxh, lxc, lxrm).
 
 УПРАВЛЕНИЕ (интерактивный режим):
   ↑, k                  листать вверх

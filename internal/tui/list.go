@@ -24,6 +24,12 @@ func renderList(m Model) string {
 		barW = 20
 	}
 
+	// Прогресс анимации: полоски и проценты заполняются от 0 до финала.
+	prog := 1.0
+	if m.animating {
+		prog = m.animProgress
+	}
+
 	for i, r := range m.results {
 		label := r.Label
 		pct := r.NormScore
@@ -33,15 +39,16 @@ func renderList(m Model) string {
 			pct = -1
 		}
 
-		bar := makeBar(pct, barW)
-		pad := maxLen - len([]rune(label))
-
-		var pf string
+		var bar, pf string
 		if pct < 0 {
+			bar = growBrokenBar(barW, prog)
 			pf = "???"
 		} else {
-			pf = fmt.Sprintf("%3d", pct)
+			dp := int(float64(pct) * prog)
+			bar = makeBar(dp, barW)
+			pf = fmt.Sprintf("%3d", dp)
 		}
+		pad := maxLen - len([]rune(label))
 
 		var line string
 		if i == m.selected {

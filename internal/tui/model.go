@@ -3,11 +3,24 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/Axawys/lxprofiler/internal/detect"
 )
+
+// animDuration — длительность анимации заполнения полосок при запуске.
+const animDuration = 3 * time.Second
+
+// animTickMsg — тик анимации (~30 кадров/с).
+type animTickMsg time.Time
+
+func animTick() tea.Cmd {
+	return tea.Tick(time.Second/30, func(t time.Time) tea.Msg {
+		return animTickMsg(t)
+	})
+}
 
 var (
 	boldStyle  = lipgloss.NewStyle().Bold(true)
@@ -36,10 +49,14 @@ type Model struct {
 	height   int
 	reqW     int // минимальная ширина терминала, чтобы всё поместилось
 	reqH     int // минимальная высота терминала
+
+	animating    bool      // идёт ли анимация заполнения полосок
+	animStart    time.Time // момент первого тика (для расчёта прогресса)
+	animProgress float64   // 0..1 — доля заполнения полосок
 }
 
-func NewModel(results []detect.ArchetypeResult) Model {
-	m := Model{selected: 0, results: results}
+func NewModel(results []detect.ArchetypeResult, animate bool) Model {
+	m := Model{selected: 0, results: results, animating: animate}
 	m.reqW, m.reqH = computeRequiredSize(results)
 	return m
 }
@@ -107,12 +124,34 @@ func maxLineWidth(s string) int {
 func lineCount(s string) int { return strings.Count(s, "\n") + 1 }
 
 func (m Model) Init() tea.Cmd {
+	if m.animating {
+		return animTick()
+	}
 	return nil
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case animTickMsg:
+		if !m.animating {
+			return m, nil
+		}
+		if m.animStart.IsZero() {
+			m.animStart = time.Time(msg)
+		}
+		m.animProgress = float64(time.Time(msg).Sub(m.animStart)) / float64(animDuration)
+		if m.animProgress >= 1 {
+			m.animProgress = 1
+			m.animating = false
+			return m, nil
+		}
+		return m, animTick()
 	case tea.KeyMsg:
+		// Любая клавиша досрочно завершает анимацию (её можно «промотать»).
+		if m.animating {
+			m.animating = false
+			m.animProgress = 1
+		}
 		switch msg.String() {
 		case "q", "Q", "й", "Й":
 			return m, tea.Quit
@@ -205,6 +244,23 @@ func makeBrokenBar(width int) string {
 		b.WriteRune(glyphs[i%len(glyphs)])
 	}
 	return b.String()
+}
+
+// growBrokenBar рисует «сломанную» полоску, заполненную слева на долю prog
+// (для анимации секретных классов); остаток — пробелы.
+func growBrokenBar(width int, prog float64) string {
+	if width <= 0 {
+		return ""
+	}
+	n := int(float64(width) * prog)
+	if n < 0 {
+		n = 0
+	}
+	if n > width {
+		n = width
+	}
+	full := []rune(makeBrokenBar(width))
+	return string(full[:n]) + strings.Repeat(" ", width-n)
 }
 
 func maskLabel(label string) string {

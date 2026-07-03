@@ -10,9 +10,9 @@ import (
 )
 
 // shortCmds — короткая команда lx и её «слитные» формы с флагом.
-// lxu == lx -u, lxs == lx -s, lxv == lx -v, lxh == lx -h, lxc == lx -c,
-// lxrm == lx --rm (разбор имени вызова — в main).
-var shortCmds = []string{"lx", "lxu", "lxs", "lxv", "lxh", "lxc", "lxrm"}
+// lxu == lx -u, lxs == lx -s, lxa == lx -a, lxv == lx -v, lxh == lx -h,
+// lxc == lx -c, lxrm == lx --rm (разбор имени вызова — в main).
+var shortCmds = []string{"lx", "lxu", "lxs", "lxa", "lxv", "lxh", "lxc", "lxrm"}
 
 // stateDir — каталог для маркеров (отказ от обновления, разовые операции).
 func stateDir() string {
@@ -26,6 +26,18 @@ func stateDir() string {
 
 func declinedFile() string { return filepath.Join(stateDir(), "update_declined") }
 func lxMarker() string     { return filepath.Join(stateDir(), "lx_setup_done") }
+func animMarker() string   { return filepath.Join(stateDir(), "anim_shown") }
+
+// firstRunAnimation → true, если анимацию заполнения ещё не показывали (первый
+// интерактивный запуск). Сразу помечает её как показанную, чтобы дальше не
+// проигрывать (принудительно — через флаг -a/--animate).
+func firstRunAnimation() bool {
+	if markerExists(animMarker()) {
+		return false
+	}
+	writeMarker(animMarker(), "")
+	return true
+}
 
 func markerExists(path string) bool { _, err := os.Stat(path); return err == nil }
 

@@ -37,6 +37,27 @@ func TestMakeBar(t *testing.T) {
 	}
 }
 
+func TestBarAnimation(t *testing.T) {
+	res := []detect.ArchetypeResult{
+		{Key: "programmer", Label: "Программист", NormScore: 100, Reason: "x"},
+	}
+	m := Model{results: res, mode: ListMode, width: 80, height: 400, animating: true}
+
+	m.animProgress = 0.0
+	c0 := strings.Count(renderList(m), "█")
+	m.animProgress = 0.5
+	c5 := strings.Count(renderList(m), "█")
+	m.animProgress = 1.0
+	c10 := strings.Count(renderList(m), "█")
+
+	if !(c0 < c5 && c5 < c10) {
+		t.Errorf("bars should grow with progress: prog0=%d prog0.5=%d prog1=%d", c0, c5, c10)
+	}
+	if c0 != 0 {
+		t.Errorf("at progress 0 the bar should be empty, got %d filled cells", c0)
+	}
+}
+
 func sampleResults() []detect.ArchetypeResult {
 	return []detect.ArchetypeResult{
 		{Key: "programmer", Label: "Программист", NormScore: 100, Reason: "go, git, make"},
@@ -55,7 +76,7 @@ func TestRequiredSizePositive(t *testing.T) {
 }
 
 func TestViewGate(t *testing.T) {
-	m := NewModel(sampleResults())
+	m := NewModel(sampleResults(), false)
 
 	// меньше требуемого → сообщение о размере
 	m.width, m.height = 20, 8
