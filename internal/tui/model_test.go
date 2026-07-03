@@ -58,6 +58,48 @@ func TestBarAnimation(t *testing.T) {
 	}
 }
 
+func TestRaceOrder(t *testing.T) {
+	// Финальный порядок (по очкам): Яблоко(100) > Апельсин(50) > Банан(10).
+	// Алфавитный (стартовый): Апельсин < Банан < Яблоко.
+	res := []detect.ArchetypeResult{
+		{Key: "a", Label: "Яблоко", NormScore: 100},
+		{Key: "b", Label: "Апельсин", NormScore: 50},
+		{Key: "c", Label: "Банан", NormScore: 10},
+	}
+	labels := func(rs []detect.ArchetypeResult) []string {
+		out := make([]string, len(rs))
+		for i, r := range rs {
+			out[i] = r.Label
+		}
+		return out
+	}
+	m := Model{results: res, mode: ListMode, animating: true}
+
+	m.animProgress = 0
+	start := labels(m.orderedResults())
+	if !equalStrings(start, []string{"Апельсин", "Банан", "Яблоко"}) {
+		t.Errorf("start order = %v, want alphabetical [Апельсин Банан Яблоко]", start)
+	}
+
+	m.animProgress = 1
+	end := labels(m.orderedResults())
+	if !equalStrings(end, []string{"Яблоко", "Апельсин", "Банан"}) {
+		t.Errorf("end order = %v, want score order [Яблоко Апельсин Банан]", end)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func sampleResults() []detect.ArchetypeResult {
 	return []detect.ArchetypeResult{
 		{Key: "programmer", Label: "Программист", NormScore: 100, Reason: "go, git, make"},

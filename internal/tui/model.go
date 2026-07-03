@@ -41,6 +41,16 @@ const (
 
 var modeNames = []string{"список", "линуксоидные координаты", "статистика"}
 
+// skipKeys — клавиши, которыми можно промотать анимацию. Вертикальная навигация
+// (j/k и ↑/↓) сюда НЕ входит: пока анимация играет, эти клавиши не работают.
+// Ответы терминала (report'ы) тоже не входят, чтобы не пропускать анимацию на старте.
+var skipKeys = map[string]bool{
+	"left": true, "right": true,
+	"h": true, "l": true, "m": true, "M": true,
+	"р": true, "д": true, "ь": true, "Ь": true,
+	" ": true, "enter": true, "esc": true,
+}
+
 type Model struct {
 	selected int
 	mode     Mode
@@ -147,12 +157,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, animTick()
 	case tea.KeyMsg:
-		// Любая клавиша досрочно завершает анимацию (её можно «промотать»).
+		key := msg.String()
+		// Во время анимации осмысленная клавиша её пропускает; ответы терминала
+		// (report'ы вроде позиции курсора) игнорируем, иначе анимация «промотается»
+		// сразу на старте.
 		if m.animating {
-			m.animating = false
-			m.animProgress = 1
+			switch key {
+			case "q", "Q", "й", "Й":
+				return m, tea.Quit
+			}
+			if skipKeys[key] {
+				m.animating = false
+				m.animProgress = 1
+			}
+			return m, nil
 		}
-		switch msg.String() {
+		switch key {
 		case "q", "Q", "й", "Й":
 			return m, tea.Quit
 		case "j", "о", "down":
