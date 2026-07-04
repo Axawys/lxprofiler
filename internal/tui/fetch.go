@@ -626,7 +626,10 @@ func renderFetch(m Model) string {
 		}
 		sb.WriteString("  " + style.Render(padRight(l, logoW)) + "   " + r + "\n")
 	}
-	sb.WriteString("\n")
-	sb.WriteString(dimStyle.Render("  ↑↓ — кратко/подробно · ←→ — режим · q — выход"))
+	// Подсказка — только в полном виде; в кратком её не показываем.
+	if m.fetchFull {
+		sb.WriteString("\n")
+		sb.WriteString(dimStyle.Render("  ↑↓ — кратко/подробно · ←→ — режим · q — выход"))
+	}
 	return sb.String()
 }
