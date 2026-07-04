@@ -15,7 +15,7 @@ import (
 
 // Version — версия сборки. По умолчанию для локальной сборки; на релизе
 // подставляется линкером: go build -ldflags "-X main.Version=X.Y.Z".
-var Version = "5.8.1"
+var Version = "5.9.0"
 
 func main() {
 	args := os.Args[1:]
@@ -37,6 +37,10 @@ func main() {
 		args = append([]string{"--rm"}, args...)
 	case "lxa":
 		args = append([]string{"-a"}, args...)
+	case "lxf":
+		args = append([]string{"-f"}, args...)
+	case "lxfm":
+		args = append([]string{"-fm"}, args...)
 	}
 
 	forceStatic := false
@@ -61,6 +65,12 @@ func main() {
 			return
 		case "c", "changes":
 			doChanges(argAt(args, 1))
+			return
+		case "f", "fetch":
+			printFetch(true)
+			return
+		case "fm", "fetch-min":
+			printFetch(false)
 			return
 		case "rm", "remove":
 			if err := doRemove(); err != nil {
@@ -132,6 +142,12 @@ func printVersion() {
 	fmt.Printf("lxprofile %s\n", Version)
 }
 
+// printFetch печатает суперфетч статично, как fastfetch: full — подробный вид,
+// иначе краткий. Профилирование архетипов при этом не запускается.
+func printFetch(full bool) {
+	fmt.Println(tui.RenderSuperfetch(full))
+}
+
 func printStatic(results []detect.ArchetypeResult) {
 	fmt.Println()
 	fmt.Println("  \033[1m🐧 l x p r o f i l e\033[0m")
@@ -183,14 +199,16 @@ func printHelp() {
 ОПЦИИ:
   -s, --static          статическая сводка вместо интерактивного режима
   -a, --animate         запустить с анимацией заполнения полосок
+  -f, --fetch           суперфетч статично (подробный вид), как fastfetch
+      --fm, --fetch-min суперфетч статично (краткий вид)
   -u, --update [ВЕР]    обновить с GitHub (или откатиться на версию ВЕР)
   -c, --changes [ВЕР]   changelog: указанной версии или 5 последних
       --rm, --remove    удалить lxprofile из системы
   -v, --version         показать версию
   -h, --help            показать эту справку
 
-  Флаги можно писать без дефиса (lx u, lx static) и слитно с короткой
-  командой lx (lxu = lx u = lx -u; так же lxs, lxa, lxv, lxh, lxc, lxrm).
+  Флаги можно писать без дефиса (lx u, lx static) и слитно с короткой командой
+  lx (lxu = lx u = lx -u; так же lxs, lxa, lxf, lxfm, lxv, lxh, lxc, lxrm).
 
 УПРАВЛЕНИЕ (интерактивный режим):
   ↑, k                  листать вверх

@@ -11,8 +11,9 @@ import (
 
 // shortCmds — короткая команда lx и её «слитные» формы с флагом.
 // lxu == lx -u, lxs == lx -s, lxa == lx -a, lxv == lx -v, lxh == lx -h,
-// lxc == lx -c, lxrm == lx --rm (разбор имени вызова — в main).
-var shortCmds = []string{"lx", "lxu", "lxs", "lxa", "lxv", "lxh", "lxc", "lxrm"}
+// lxc == lx -c, lxrm == lx --rm, lxf == суперфетч (подробный), lxfm ==
+// суперфетч (краткий) — статичным выводом, как fastfetch (разбор имени — в main).
+var shortCmds = []string{"lx", "lxu", "lxs", "lxa", "lxv", "lxh", "lxc", "lxrm", "lxf", "lxfm"}
 
 // stateDir — каталог для маркеров (отказ от обновления, разовые операции).
 func stateDir() string {

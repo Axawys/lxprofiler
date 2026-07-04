@@ -52,17 +52,35 @@ type fetchInfo struct {
 }
 
 var (
-	fetchOnce   sync.Once
-	fetchCached fetchInfo
+	fetchMu       sync.Mutex
+	fetchCached   fetchInfo
+	fetchCoreDone bool
+	fetchFullDone bool
 )
 
-// computeFetch собирает системную инфу один раз (df/stat/pkg не на каждый кадр).
-func computeFetch() fetchInfo {
-	fetchOnce.Do(func() { fetchCached = gatherFetch() })
+// computeFetch собирает системную инфу с кешем в два яруса. Дешёвое «ядро»
+// (файлы /proc, os-release, df) собирается один раз; тяжёлые внешние команды
+// (lspci, xrandr, подсчёт пакетов, flatpak/snap, --version) — только когда нужен
+// подробный вид, и тоже один раз. Так краткий суперфетч (lxfm) не платит почти
+// секунду за данные, которых он не показывает.
+func computeFetch(full bool) fetchInfo {
+	fetchMu.Lock()
+	defer fetchMu.Unlock()
+	if !fetchCoreDone {
+		fetchCached = gatherCore()
+		fetchCoreDone = true
+	}
+	if full && !fetchFullDone {
+		gatherExtended(&fetchCached)
+		fetchFullDone = true
+	}
 	return fetchCached
 }
 
-func gatherFetch() fetchInfo {
+// gatherCore собирает то, что показывает даже краткий вид: пользователь/хост,
+// дистрибутив, ядро, аптайм, CPU, ОЗУ, диск. Только чтение файлов и лёгкий df —
+// быстро.
+func gatherCore() fetchInfo {
 	fi := fetchInfo{User: "user", Host: "linux", Distro: "Linux", DistroID: "linux"}
 	if u := os.Getenv("USER"); u != "" {
 		fi.User = u
@@ -138,22 +156,23 @@ func gatherFetch() fetchInfo {
 		fi.RAMUsed = humanGiB(used)
 		fi.RAMPct = used * 100 / memTotal
 	}
-	// ── Внешние команды параллельно ────────────────────
-	// stat/df/lspci/xrandr/пакетный менеджер/flatpak/snap/--version независимы и
-	// в основном ждут I/O — запускаем разом, иначе открытие суперфетча тормозило
-	// бы почти секунду. Результаты пишутся в локальные переменные, в fi —
-	// последовательно после Wait (без гонок).
+	// Диск показывается и в кратком виде; df лёгкий (~1 мс) — считаем сразу.
+	fi.DiskTotal, fi.DiskUsed, fi.DiskPct, fi.HasDisk = diskInfo()
+	return fi
+}
+
+// gatherExtended дополняет fi данными только для подробного вида: дата установки,
+// GPU, дисплей, shell, DE/WM, пакеты, flatpak/snap. Все они зовут внешние команды
+// и в основном ждут I/O — запускаем разом; в fi пишем после Wait (без гонок).
+// Самая долгая — подсчёт пакетов, она и задаёт итоговое время.
+func gatherExtended(fi *fetchInfo) {
 	var (
-		wg                    sync.WaitGroup
-		instDate              string
-		instAge               int
-		instOK                bool
-		gpu, disp             string
-		shell, dewm, pkgKind  string
-		pkgN, flatpakN, snapN int
-		diskT, diskU          string
-		diskPct               int
-		diskOK                bool
+		wg                              sync.WaitGroup
+		instDate                        string
+		instAge                         int
+		instOK                          bool
+		gpu, disp, shell, dewm, pkgKind string
+		pkgN, flatpakN, snapN           int
 	)
 	run := func(f func()) {
 		wg.Add(1)
@@ -167,7 +186,6 @@ func gatherFetch() fetchInfo {
 	run(func() { pkgKind, pkgN = pkgInfo() })
 	run(func() { flatpakN = flatpakCount() })
 	run(func() { snapN = snapCount() })
-	run(func() { diskT, diskU, diskPct, diskOK = diskInfo() })
 	wg.Wait()
 
 	fi.InstallDate, fi.AgeDays, fi.HasInstall = instDate, instAge, instOK
@@ -175,9 +193,6 @@ func gatherFetch() fetchInfo {
 	fi.Shell, fi.DEWM = shell, dewm
 	fi.PkgKind, fi.Packages = pkgKind, pkgN
 	fi.FlatpakN, fi.SnapN = flatpakN, snapN
-	fi.DiskTotal, fi.DiskUsed, fi.DiskPct, fi.HasDisk = diskT, diskU, diskPct, diskOK
-
-	return fi
 }
 
 // installInfo — дата установки системы: время рождения корня, иначе mtime
@@ -815,8 +830,15 @@ func fetchInfoMinimal(fi fetchInfo) []string {
 	return info
 }
 
+// RenderSuperfetch отрисовывает суперфетч для статического вывода (как
+// fastfetch): full — подробный режим, иначе краткий. Собирает системную инфу и
+// возвращает готовый к печати блок с логотипом дистрибутива.
+func RenderSuperfetch(full bool) string {
+	return renderFetch(Model{mode: FetchMode, fetchFull: full})
+}
+
 func renderFetch(m Model) string {
-	fi := computeFetch()
+	fi := computeFetch(m.fetchFull)
 
 	key := logoKey(fi.DistroID)
 	// В кратком виде — компактный логотип; в подробном инфы много и окно
