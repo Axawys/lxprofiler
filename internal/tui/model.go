@@ -25,9 +25,10 @@ func animTick() tea.Cmd {
 var (
 	boldStyle  = lipgloss.NewStyle().Bold(true)
 	dimStyle   = lipgloss.NewStyle().Faint(true)
-	greenStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	cyanStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	redStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	cyanStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
 type Mode int
@@ -36,7 +37,11 @@ const (
 	ListMode Mode = iota
 	CompassMode
 	StatsMode
+	FetchMode
 )
+
+// modeCount — число режимов для циклического переключения ←/→.
+const modeCount = 4
 
 type Model struct {
 	selected int
@@ -75,14 +80,20 @@ func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
 	}
 
 	// Координаты и статистика по ширине не переносятся — берём их натуральную
-	// ширину, отрисовав на заведомо большом «холсте».
-	big := Model{results: results, width: 400, height: 400}
+	// ширину, отрисовав на заведомо большом «холсте». Заголовок-линейка
+	// (titleRule) тянется во всю ширину холста — она адаптивна и не должна
+	// задавать минимально требуемую ширину, поэтому строки длиной с холст
+	// (== canvas) при измерении пропускаем.
+	const canvas = 400
+	big := Model{results: results, width: canvas, height: canvas}
 	big.mode = CompassMode
 	compassView := renderCompass(big)
 	big.mode = StatsMode
 	statsView := renderStats(big)
-	for _, v := range []string{compassView, statsView} {
-		if w := maxLineWidth(v); w > reqW {
+	big.mode = FetchMode
+	fetchView := renderFetch(big)
+	for _, v := range []string{compassView, statsView, fetchView} {
+		if w := maxContentWidth(v, canvas); w > reqW {
 			reqW = w
 		}
 	}
@@ -90,8 +101,10 @@ func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
 	// Высота: максимум по режимам. У списка высота зависит от переноса описания
 	// и «что повлияло», а те переносятся по ширине reqW — берём худший класс.
 	reqH := lineCount(compassView)
-	if h := lineCount(statsView); h > reqH {
-		reqH = h
+	for _, v := range []string{statsView, fetchView} {
+		if h := lineCount(v); h > reqH {
+			reqH = h
+		}
 	}
 	lm := Model{results: results, mode: ListMode, width: reqW, height: 400}
 	if len(results) == 0 {
@@ -112,6 +125,22 @@ func maxLineWidth(s string) int {
 	max := 0
 	for _, line := range strings.Split(s, "\n") {
 		if w := lipgloss.Width(line); w > max {
+			max = w
+		}
+	}
+	return max
+}
+
+// maxContentWidth — как maxLineWidth, но пропускает строки во всю ширину холста
+// (адаптивные заголовки-линейки), чтобы они не завышали требуемую ширину.
+func maxContentWidth(s string, canvas int) int {
+	max := 0
+	for _, line := range strings.Split(s, "\n") {
+		w := lipgloss.Width(line)
+		if w >= canvas {
+			continue
+		}
+		if w > max {
 			max = w
 		}
 	}
@@ -170,9 +199,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "G", "П":
 			m.selected = len(m.results) - 1
 		case "m", "M", "ь", "Ь", "l", "д", "right":
-			m.mode = (m.mode + 1) % 3
+			m.mode = (m.mode + 1) % modeCount
 		case "h", "р", "left":
-			m.mode = (m.mode + 2) % 3
+			m.mode = (m.mode + modeCount - 1) % modeCount
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -194,6 +223,8 @@ func (m Model) View() string {
 		return renderCompass(m)
 	case StatsMode:
 		return renderStats(m)
+	case FetchMode:
+		return renderFetch(m)
 	default:
 		return renderList(m)
 	}
@@ -267,6 +298,35 @@ func growBrokenBar(width int, prog float64) string {
 
 func maskLabel(label string) string {
 	return strings.Repeat("?", len([]rune(label)))
+}
+
+// padRight добивает строку пробелами справа до видимой ширины w (по lipgloss.Width,
+// чтобы кириллица и emoji считались корректно). Уже длинную строку не трогает.
+func padRight(s string, w int) string {
+	if d := w - lipgloss.Width(s); d > 0 {
+		return s + strings.Repeat(" ", d)
+	}
+	return s
+}
+
+// padLeft добивает строку пробелами слева до видимой ширины w.
+func padLeft(s string, w int) string {
+	if d := w - lipgloss.Width(s); d > 0 {
+		return strings.Repeat(" ", d) + s
+	}
+	return s
+}
+
+// titleRule рисует заголовок секции и добивает строку линией до правого края:
+//
+//	  📊 Заголовок ───────────────────────────────
+func titleRule(title string, width int) string {
+	head := "  " + title + " "
+	rem := width - lipgloss.Width(head)
+	if rem < 1 {
+		rem = 1
+	}
+	return "  " + boldStyle.Render(title) + " " + dimStyle.Render(strings.Repeat("─", rem))
 }
 
 func wrapText(text string, width int) string {

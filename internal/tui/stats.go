@@ -449,50 +449,30 @@ func editorWin(vim, nvim, nano, emacs, micro int) string {
 	return "победил " + best
 }
 
-func browserBattleLine(browserCache map[string]int) string {
-	type browser struct {
-		name string
-		kb   int
-	}
-	var browsers []browser
-	max := 0
-	for name, kb := range browserCache {
-		if kb > 0 {
-			browsers = append(browsers, browser{name: name, kb: kb})
-			if kb > max {
-				max = kb
-			}
-		}
-	}
-	if max == 0 {
+// miniBar рисует короткий бар из закрашенных ячеек, пропорциональный val/max
+// (минимум 1 ячейка для ненулевого значения). Без пустого «трека» — чтобы
+// inline-«войны» в статистике не растягивали строку.
+func miniBar(val, max, cells int) string {
+	if max <= 0 || val <= 0 {
 		return ""
 	}
-	sort.Slice(browsers, func(i, j int) bool {
-		return browsers[i].kb > browsers[j].kb
-	})
-	var parts []string
-	ties := 0
-	win := ""
-	for _, b := range browsers {
-		parts = append(parts, fmt.Sprintf("%s %s", b.name, humanKB(b.kb)))
-		if b.kb == max {
-			ties++
-			win = b.name
-		}
+	n := val * cells / max
+	if n < 1 {
+		n = 1
 	}
-	line := strings.Join(parts, " : ")
-	if ties > 1 {
-		line += "  → ничья"
-	} else {
-		line += "  → чаще всех " + win
+	if n > cells {
+		n = cells
 	}
-	return line
+	return strings.Repeat("█", n)
 }
 
 func renderStats(m Model) string {
 	var sb strings.Builder
 
 	s := computeStats()
+
+	sb.WriteString(titleRule("📊 Забавная статистика", m.width))
+	sb.WriteString("\n")
 
 	if !s.HasHistory {
 		sb.WriteString(dimStyle.Render("  История команд пуста или недоступна."))
@@ -504,71 +484,113 @@ func renderStats(m Model) string {
 	}
 
 	spanSec := s.SpanDays * 86400
-	sb.WriteString(fmt.Sprintf("  В истории %s команд, %s уникальных%s",
+	sb.WriteString(fmt.Sprintf("  %s команд · %s уникальных · %s\n\n",
 		boldStyle.Render(fmt.Sprintf("%d", s.TotalCmds)),
 		boldStyle.Render(fmt.Sprintf("%d", s.UniqueCmds)),
-		dimStyle.Render(fmt.Sprintf(" (охват ~%d дн.)", s.SpanDays))))
-	sb.WriteString("\n\n")
+		dimStyle.Render(fmt.Sprintf("охват ~%d дн.", s.SpanDays))))
 
-	sb.WriteString("  Любимые команды:")
+	// Топ команд — ранг, имя (выровнено), счётчик, частота.
+	sb.WriteString(cyanStyle.Render("  Топ команд"))
 	sb.WriteString("\n")
-	if len(s.TopCmds) > 0 {
-		sb.WriteString(fmt.Sprintf("    1. %s — %s× %s\n",
-			greenStyle.Render(s.TopCmds[0].Cmd),
-			boldStyle.Render(fmt.Sprintf("%d", s.TopCmds[0].Count)),
-			dimStyle.Render(fmt.Sprintf("(%s)", freq(s.TopCmds[0].Count, spanSec)))))
+	for i, c := range s.TopCmds {
+		name := padRight(c.Cmd, 12)
+		if i == 0 {
+			name = greenStyle.Render(name)
+		} else {
+			name = boldStyle.Render(name)
+		}
+		sb.WriteString(fmt.Sprintf("    %d. %s %s  %s\n",
+			i+1, name,
+			boldStyle.Render(padLeft(fmt.Sprintf("%d×", c.Count), 5)),
+			dimStyle.Render(freq(c.Count, spanSec))))
 	}
-	if len(s.TopCmds) > 1 {
-		sb.WriteString(fmt.Sprintf("    2. %s — %s× %s\n",
-			boldStyle.Render(s.TopCmds[1].Cmd),
-			boldStyle.Render(fmt.Sprintf("%d", s.TopCmds[1].Count)),
-			dimStyle.Render(fmt.Sprintf("(%s)", freq(s.TopCmds[1].Count, spanSec)))))
+	sb.WriteString("\n")
+
+	// Метрики одним выровненным столбцом: метка · счётчик · частота · комментарий.
+	metric := func(label string, count int, freqTxt, quip string) {
+		sb.WriteString(fmt.Sprintf("  %s %s %s %s\n",
+			padRight(label, 11),
+			boldStyle.Render(padLeft(fmt.Sprintf("%d×", count), 5)),
+			dimStyle.Render(padRight(freqTxt, 13)),
+			dimStyle.Render("· "+quip)))
 	}
-	if len(s.TopCmds) > 2 {
-		sb.WriteString(fmt.Sprintf("    3. %s — %s× %s\n",
-			boldStyle.Render(s.TopCmds[2].Cmd),
-			boldStyle.Render(fmt.Sprintf("%d", s.TopCmds[2].Count)),
-			dimStyle.Render(fmt.Sprintf("(%s)", freq(s.TopCmds[2].Count, spanSec)))))
+	metric("fastfetch", s.FFCount, freq(s.FFCount, spanSec), ffQuip(spanSec, s.FFCount))
+	metric("обновления", s.UpdCount, freq(s.UpdCount, spanSec), updQuip(spanSec, s.UpdCount))
+	metric("sudo/doas", s.SudoCount, freq(s.SudoCount, spanSec), sudoQuip(spanSec, s.SudoCount))
+	metric("rm -rf", s.RMRFCount, freq(s.RMRFCount, spanSec), rmrfQuip(spanSec, s.RMRFCount))
+	metric("опечатки", s.TypoCount, "", "sl, gti, claer, cd..…")
+	sb.WriteString("\n")
+
+	// Редактор-война — мини-бары по числу вызовов (только ненулевые, по убыванию).
+	edLine := battleLine("Редактор-война", []battleItem{
+		{"vim", s.VimCount, fmt.Sprintf("%d", s.VimCount)},
+		{"nvim", s.NvimCount, fmt.Sprintf("%d", s.NvimCount)},
+		{"nano", s.NanoCount, fmt.Sprintf("%d", s.NanoCount)},
+		{"emacs", s.EmacsCount, fmt.Sprintf("%d", s.EmacsCount)},
+		{"micro", s.MicroCount, fmt.Sprintf("%d", s.MicroCount)},
+	})
+	if edLine == "" { // все редакторы по нулям
+		edLine = fmt.Sprintf("  %s  %s\n",
+			boldStyle.Render(padRight("Редактор-война", 15)),
+			dimStyle.Render("все мимо — GUI?"))
 	}
+	sb.WriteString(edLine)
 
-	sb.WriteString(fmt.Sprintf("  fastfetch/neofetch: %s× %s — %s\n",
-		boldStyle.Render(fmt.Sprintf("%d", s.FFCount)),
-		dimStyle.Render(fmt.Sprintf("(%s)", freq(s.FFCount, spanSec))),
-		dimStyle.Render(ffQuip(spanSec, s.FFCount))))
-
-	sb.WriteString(fmt.Sprintf("  Обновления: %s× %s — %s\n",
-		boldStyle.Render(fmt.Sprintf("%d", s.UpdCount)),
-		dimStyle.Render(fmt.Sprintf("(%s)", freq(s.UpdCount, spanSec))),
-		dimStyle.Render(updQuip(spanSec, s.UpdCount))))
-
-	sb.WriteString(fmt.Sprintf("  sudo/doas: %s× %s — %s\n",
-		boldStyle.Render(fmt.Sprintf("%d", s.SudoCount)),
-		dimStyle.Render(fmt.Sprintf("(%s)", freq(s.SudoCount, spanSec))),
-		dimStyle.Render(sudoQuip(spanSec, s.SudoCount))))
-
-	sb.WriteString(fmt.Sprintf("  rm -rf: %s× — %s\n",
-		boldStyle.Render(fmt.Sprintf("%d", s.RMRFCount)),
-		dimStyle.Render(rmrfQuip(spanSec, s.RMRFCount))))
-
-	sb.WriteString(fmt.Sprintf("  Опечаток поймано: %s%s\n",
-		boldStyle.Render(fmt.Sprintf("%d", s.TypoCount)),
-		dimStyle.Render(" (sl, gti, claer, cd..…)")))
-
-	sb.WriteString(fmt.Sprintf("  Редактор-война: %s %d : %s %d : %s %d : %s %d : %s %d  %s\n",
-		dimStyle.Render("vim"), s.VimCount,
-		dimStyle.Render("nvim"), s.NvimCount,
-		dimStyle.Render("nano"), s.NanoCount,
-		dimStyle.Render("emacs"), s.EmacsCount,
-		dimStyle.Render("micro"), s.MicroCount,
-		dimStyle.Render("→ "+editorWin(s.VimCount, s.NvimCount, s.NanoCount, s.EmacsCount, s.MicroCount))))
-
-	bb := browserBattleLine(s.BrowserCache)
-	if bb != "" {
-		sb.WriteString(fmt.Sprintf("  Битва браузеров: %s\n", bb))
+	// Битва браузеров — мини-бары по объёму кеша.
+	var brItems []battleItem
+	for name, kb := range s.BrowserCache {
+		brItems = append(brItems, battleItem{name, kb, humanKB(kb)})
+	}
+	if line := battleLine("Битва браузеров", brItems); line != "" {
+		sb.WriteString(line)
 	}
 
 	sb.WriteString("\n")
 	sb.WriteString(dimStyle.Render("  ↑↓ — листать · ←→ — режим · q — выход"))
 
 	return sb.String()
+}
+
+type battleItem struct {
+	name  string
+	val   int
+	label string // что показать справа от бара (счётчик или размер)
+}
+
+// battleLine формирует строку «войны»: ненулевые участники по убыванию, у каждого
+// мини-бар относительно лидера и подпись победителя. Пусто, если участников нет.
+func battleLine(title string, items []battleItem) string {
+	var live []battleItem
+	max := 0
+	for _, it := range items {
+		if it.val > 0 {
+			live = append(live, it)
+			if it.val > max {
+				max = it.val
+			}
+		}
+	}
+	if len(live) == 0 {
+		return ""
+	}
+	sort.Slice(live, func(i, j int) bool { return live[i].val > live[j].val })
+
+	var parts []string
+	ties, leader := 0, ""
+	for _, it := range live {
+		parts = append(parts, fmt.Sprintf("%s %s %s",
+			it.name, cyanStyle.Render(miniBar(it.val, max, 4)), it.label))
+		if it.val == max {
+			ties++
+			leader = it.name
+		}
+	}
+	winner := "→ " + leader
+	if ties > 1 {
+		winner = "→ ничья"
+	}
+	return fmt.Sprintf("  %s  %s  %s\n",
+		boldStyle.Render(padRight(title, 15)),
+		strings.Join(parts, dimStyle.Render(" · ")),
+		greenStyle.Render(winner))
 }

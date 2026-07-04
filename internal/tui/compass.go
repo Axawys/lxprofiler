@@ -98,8 +98,8 @@ func renderCompass(m Model) string {
 	if gw%2 == 0 {
 		gw--
 	}
-	if gh > m.height-14 {
-		gh = m.height - 14
+	if gh > m.height-15 {
+		gh = m.height - 15
 	}
 	if gh < 7 {
 		gh = 7
@@ -130,6 +130,8 @@ func renderCompass(m Model) string {
 	sy := fmt.Sprintf("%+d", compass.CY)
 	coordLabel := cyanStyle.Render(fmt.Sprintf("%s;%s", sx, sy))
 
+	sb.WriteString(titleRule("🧭 Линуксоидные координаты", m.width))
+	sb.WriteString("\n")
 	sb.WriteString("   " + boldStyle.Render("▲ КОНТРОЛЬ (всё руками)"))
 	sb.WriteString("\n")
 
@@ -162,9 +164,13 @@ func renderCompass(m Model) string {
 	sb.WriteString("   " + dimStyle.Render(fmt.Sprintf("◄ новаторы%*sтрадиции ►", gw-20, "")))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(fmt.Sprintf("  %s %s %s", cyanStyle.Render("●"), boldStyle.Render("ты:"), compass.Quadrant))
+	sb.WriteString(fmt.Sprintf("  %s %s %s  %s",
+		cyanStyle.Render("●"),
+		boldStyle.Render("ты:"),
+		compass.Quadrant,
+		dimStyle.Render(fmt.Sprintf("(%s;%s)", sx, sy))))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("  %s", dimStyle.Render(fmt.Sprintf("   координаты (новат↔трад ; контроль↔удоб): %s;%s", sx, sy))))
+	sb.WriteString(dimStyle.Render("     ось X — новаторы ↔ традиции · ось Y — контроль ↔ удобство"))
 	sb.WriteString("\n\n")
 	sb.WriteString(dimStyle.Render("  ↑↓ — листать · ←→ — режим · q — выход"))
 
