@@ -21,11 +21,7 @@ type StatsResult struct {
 	UpdCount     int
 	RMRFCount    int
 	TypoCount    int
-	VimCount     int
-	NvimCount    int
-	NanoCount    int
-	EmacsCount   int
-	MicroCount   int
+	Editors      map[string]int // редактор → сколько раз встретился в истории
 	SpanDays     int
 	HasHistory   bool
 	BrowserCache map[string]int
@@ -118,6 +114,24 @@ var fetchTools = map[string]bool{
 	"paleofetch": true, "cpufetch": true,
 }
 
+// editorNames — команда запуска редактора → отображаемое имя. Явные варианты
+// одного редактора (vi/gvim → vim, emacsclient → emacs) сливаются вместе.
+var editorNames = map[string]string{
+	"vim": "vim", "vi": "vim", "gvim": "vim", "vimx": "vim", "nvi": "vim",
+	"nvim": "nvim", "neovim": "nvim", "nvim-qt": "nvim",
+	"nano": "nano",
+	"emacs": "emacs", "emacsclient": "emacs",
+	"micro": "micro",
+	"hx": "helix", "helix": "helix",
+	"kak": "kakoune",
+	"ne": "ne", "joe": "joe", "jed": "jed", "mg": "mg", "vis": "vis", "ed": "ed",
+	"pico": "pico", "mcedit": "mcedit",
+	"code": "vscode", "code-insiders": "vscode", "codium": "vscodium",
+	"subl": "sublime", "zed": "zed", "zeditor": "zed",
+	"gedit": "gedit", "kate": "kate", "kwrite": "kwrite",
+	"mousepad": "mousepad", "leafpad": "leafpad", "geany": "geany",
+}
+
 // aliasRe разбирает объявления alias/abbr: имя и значение (bash/zsh/fish).
 var aliasRe = regexp.MustCompile(`(?i)^\s*(?:alias|abbr)(?:\s+-\S+)*\s+([\w.-]+)\s*=?\s*(.*)$`)
 
@@ -198,6 +212,9 @@ func tallyCommands(commands []string, fetchAlias map[string]bool, result *StatsR
 		return
 	}
 	result.HasHistory = true
+	if result.Editors == nil {
+		result.Editors = map[string]int{}
+	}
 
 	cmdCount := map[string]int{}
 	seen := map[string]bool{}
@@ -216,17 +233,8 @@ func tallyCommands(commands []string, fetchAlias map[string]bool, result *StatsR
 		}
 		cmdCount[word]++
 		seen[word] = true
-		switch word {
-		case "vim", "vi":
-			result.VimCount++
-		case "nvim":
-			result.NvimCount++
-		case "nano":
-			result.NanoCount++
-		case "emacs":
-			result.EmacsCount++
-		case "micro":
-			result.MicroCount++
+		if disp, ok := editorNames[word]; ok {
+			result.Editors[disp]++
 		}
 		if typos[word] {
 			result.TypoCount++
@@ -417,55 +425,6 @@ func sudoQuip(spanSec, sudoCount int) string {
 	}
 }
 
-func editorWin(vim, nvim, nano, emacs, micro int) string {
-	counts := []struct {
-		name  string
-		count int
-	}{
-		{"vim", vim}, {"nvim", nvim}, {"nano", nano}, {"emacs", emacs}, {"micro", micro},
-	}
-	total := 0
-	bestn := -1
-	for _, c := range counts {
-		total += c.count
-		if c.count > bestn {
-			bestn = c.count
-		}
-	}
-	if total == 0 {
-		return "все мимо — GUI?"
-	}
-	ties := 0
-	best := ""
-	for _, c := range counts {
-		if c.count == bestn {
-			ties++
-			best = c.name
-		}
-	}
-	if ties > 1 {
-		return "ничья"
-	}
-	return "победил " + best
-}
-
-// miniBar рисует короткий бар из закрашенных ячеек, пропорциональный val/max
-// (минимум 1 ячейка для ненулевого значения). Без пустого «трека» — чтобы
-// inline-«войны» в статистике не растягивали строку.
-func miniBar(val, max, cells int) string {
-	if max <= 0 || val <= 0 {
-		return ""
-	}
-	n := val * cells / max
-	if n < 1 {
-		n = 1
-	}
-	if n > cells {
-		n = cells
-	}
-	return strings.Repeat("█", n)
-}
-
 func renderStats(m Model) string {
 	var sb strings.Builder
 
@@ -521,22 +480,20 @@ func renderStats(m Model) string {
 	metric("опечатки", s.TypoCount, "", "sl, gti, claer, cd..…")
 	sb.WriteString("\n")
 
-	// Редактор-война — мини-бары по числу вызовов (только ненулевые, по убыванию).
-	edLine := battleLine("Редактор-война", []battleItem{
-		{"vim", s.VimCount, fmt.Sprintf("%d", s.VimCount)},
-		{"nvim", s.NvimCount, fmt.Sprintf("%d", s.NvimCount)},
-		{"nano", s.NanoCount, fmt.Sprintf("%d", s.NanoCount)},
-		{"emacs", s.EmacsCount, fmt.Sprintf("%d", s.EmacsCount)},
-		{"micro", s.MicroCount, fmt.Sprintf("%d", s.MicroCount)},
-	})
-	if edLine == "" { // все редакторы по нулям
+	// Редактор-война — все редакторы, встреченные в истории, по убыванию.
+	var edItems []battleItem
+	for name, cnt := range s.Editors {
+		edItems = append(edItems, battleItem{name, cnt, strconv.Itoa(cnt)})
+	}
+	edLine := battleLine("Редактор-война", edItems)
+	if edLine == "" { // ни одного редактора в истории
 		edLine = fmt.Sprintf("  %s  %s\n",
 			boldStyle.Render(padRight("Редактор-война", 15)),
 			dimStyle.Render("все мимо — GUI?"))
 	}
 	sb.WriteString(edLine)
 
-	// Битва браузеров — мини-бары по объёму кеша.
+	// Битва браузеров — по объёму кеша.
 	var brItems []battleItem
 	for name, kb := range s.BrowserCache {
 		brItems = append(brItems, battleItem{name, kb, humanKB(kb)})
@@ -554,11 +511,12 @@ func renderStats(m Model) string {
 type battleItem struct {
 	name  string
 	val   int
-	label string // что показать справа от бара (счётчик или размер)
+	label string // что показать рядом с именем (счётчик или размер)
 }
 
-// battleLine формирует строку «войны»: ненулевые участники по убыванию, у каждого
-// мини-бар относительно лидера и подпись победителя. Пусто, если участников нет.
+// battleLine формирует строку «войны»: ненулевые участники по убыванию (при
+// равенстве — по имени, чтобы порядок был стабилен), лидер подсвечен. Пусто,
+// если участников нет.
 func battleLine(title string, items []battleItem) string {
 	var live []battleItem
 	max := 0
@@ -573,13 +531,17 @@ func battleLine(title string, items []battleItem) string {
 	if len(live) == 0 {
 		return ""
 	}
-	sort.Slice(live, func(i, j int) bool { return live[i].val > live[j].val })
+	sort.Slice(live, func(i, j int) bool {
+		if live[i].val != live[j].val {
+			return live[i].val > live[j].val
+		}
+		return live[i].name < live[j].name
+	})
 
 	var parts []string
 	ties, leader := 0, ""
 	for _, it := range live {
-		parts = append(parts, fmt.Sprintf("%s %s %s",
-			it.name, cyanStyle.Render(miniBar(it.val, max, 4)), it.label))
+		parts = append(parts, it.name+" "+boldStyle.Render(it.label))
 		if it.val == max {
 			ties++
 			leader = it.name

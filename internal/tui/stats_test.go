@@ -53,32 +53,6 @@ func TestHumanInterval(t *testing.T) {
 	}
 }
 
-func TestEditorWin(t *testing.T) {
-	tests := []struct {
-		vim, nvim, nano, emacs, micro int
-		want                         string
-	}{
-		{0, 0, 0, 0, 0, "все мимо — GUI?"},
-		{10, 5, 3, 2, 1, "победил vim"},
-		{5, 5, 3, 2, 1, "ничья"},
-		{0, 0, 0, 0, 10, "победил micro"},
-		{1, 0, 0, 0, 0, "победил vim"},
-		{0, 1, 0, 0, 0, "победил nvim"},
-		{0, 0, 1, 0, 0, "победил nano"},
-		{0, 0, 0, 1, 0, "победил emacs"},
-		{10, 10, 10, 10, 10, "ничья"},
-		{100, 50, 30, 20, 10, "победил vim"},
-		{10, 100, 5, 5, 5, "победил nvim"},
-	}
-	for _, tt := range tests {
-		got := editorWin(tt.vim, tt.nvim, tt.nano, tt.emacs, tt.micro)
-		if got != tt.want {
-			t.Errorf("editorWin(%d,%d,%d,%d,%d) = %q, want %q",
-				tt.vim, tt.nvim, tt.nano, tt.emacs, tt.micro, got, tt.want)
-		}
-	}
-}
-
 func TestEditorCounts(t *testing.T) {
 	// Test the counting logic directly
 	// The raw string starts with a newline (as in computeStats)

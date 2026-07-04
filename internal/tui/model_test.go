@@ -108,12 +108,17 @@ func sampleResults() []detect.ArchetypeResult {
 }
 
 func TestRequiredSizePositive(t *testing.T) {
-	w, h := computeRequiredSize(sampleResults())
+	w, h, fw, fh := computeRequiredSize(sampleResults())
 	if w < 48 {
 		t.Errorf("reqW = %d, want >= 48 (floor)", w)
 	}
 	if h < 10 {
 		t.Errorf("reqH = %d, want >= 10", h)
+	}
+	for i := range fw {
+		if fw[i] < 1 || fh[i] < 1 {
+			t.Errorf("fetchReq[%d] = %dx%d, want positive", i, fw[i], fh[i])
+		}
 	}
 }
 

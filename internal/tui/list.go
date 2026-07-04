@@ -127,7 +127,6 @@ func renderList(m Model) string {
 		return sb.String()
 	}
 
-	sb.WriteString("\n")
 	sb.WriteString(dimStyle.Render(strings.Repeat("─", m.width)))
 	sb.WriteString("\n")
 

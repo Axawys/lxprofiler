@@ -22,24 +22,32 @@ func TestExtractCommand(t *testing.T) {
 }
 
 func TestTallyCommandsEditors(t *testing.T) {
-	// vim вызывался 5 раз с аргументами и под sudo — все должны считаться.
+	// vim вызывался 5 раз с аргументами и под sudo — все должны считаться;
+	// helix (hx) и code — тоже редакторы, их надо учесть по имени.
 	commands := []string{
 		"vim a.txt", "vim b.txt", "vim c.go", "sudo vim /etc/hosts", "vi notes",
 		"nvim init.lua", "nvim plugin.lua",
 		"nano quick.txt",
+		"hx main.rs", "code .",
 		"ls -la", "ls", "git status",
 	}
 	var r StatsResult
 	tallyCommands(commands, nil, &r)
 
-	if r.VimCount != 5 {
-		t.Errorf("VimCount = %d, want 5 (vim×3 + sudo vim + vi)", r.VimCount)
+	if r.Editors["vim"] != 5 {
+		t.Errorf("Editors[vim] = %d, want 5 (vim×3 + sudo vim + vi)", r.Editors["vim"])
 	}
-	if r.NvimCount != 2 {
-		t.Errorf("NvimCount = %d, want 2", r.NvimCount)
+	if r.Editors["nvim"] != 2 {
+		t.Errorf("Editors[nvim] = %d, want 2", r.Editors["nvim"])
 	}
-	if r.NanoCount != 1 {
-		t.Errorf("NanoCount = %d, want 1", r.NanoCount)
+	if r.Editors["nano"] != 1 {
+		t.Errorf("Editors[nano] = %d, want 1", r.Editors["nano"])
+	}
+	if r.Editors["helix"] != 1 {
+		t.Errorf("Editors[helix] = %d, want 1 (hx)", r.Editors["helix"])
+	}
+	if r.Editors["vscode"] != 1 {
+		t.Errorf("Editors[vscode] = %d, want 1 (code)", r.Editors["vscode"])
 	}
 	if r.SudoCount != 1 {
 		t.Errorf("SudoCount = %d, want 1", r.SudoCount)

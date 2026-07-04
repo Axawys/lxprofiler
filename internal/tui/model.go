@@ -49,8 +49,14 @@ type Model struct {
 	results  []detect.ArchetypeResult
 	width    int
 	height   int
-	reqW     int // минимальная ширина терминала, чтобы всё поместилось
-	reqH     int // минимальная высота терминала
+	reqW     int // минимальная ширина для списка/координат/статистики
+	reqH     int // минимальная высота для них же
+
+	// Суперфетч со своим требованием по размеру — оно применяется только в
+	// этом режиме и зависит от под-режима: [0] — краткий, [1] — полный.
+	fetchReqW [2]int
+	fetchReqH [2]int
+	fetchFull bool // полный (true) или краткий (false) вид суперфетча
 
 	animating    bool      // идёт ли анимация заполнения полосок
 	animStart    time.Time // момент первого тика (для расчёта прогресса)
@@ -58,15 +64,16 @@ type Model struct {
 }
 
 func NewModel(results []detect.ArchetypeResult, animate bool) Model {
-	m := Model{selected: 0, results: results, animating: animate}
-	m.reqW, m.reqH = computeRequiredSize(results)
+	m := Model{selected: 0, results: results, animating: animate, fetchFull: true}
+	m.reqW, m.reqH, m.fetchReqW, m.fetchReqH = computeRequiredSize(results)
 	return m
 }
 
-// computeRequiredSize считает минимальный размер терминала, при котором ни один
-// из режимов (список / координаты / статистика) не обрезается. Считается один
-// раз при создании модели: набор классов фиксирован, так что размер не меняется.
-func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
+// computeRequiredSize считает минимальный размер терминала по режимам. Базовое
+// требование (reqW/reqH) — максимум по списку/координатам/статистике; суперфетч
+// имеет отдельное требование на каждый под-режим (краткий/полный), чтобы его
+// размеры не влияли на остальные режимы. Считается один раз при создании модели.
+func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int, fetchReqW, fetchReqH [2]int) {
 	// Ширина строки списка: "▶ " + метка + добивка + "  100%  " + бар(20).
 	maxLabel := 0
 	for _, r := range results {
@@ -74,7 +81,7 @@ func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
 			maxLabel = w
 		}
 	}
-	reqW := 2 + maxLabel + 2 + 3 + 1 + 2 + 20
+	reqW = 2 + maxLabel + 2 + 3 + 1 + 2 + 20
 	if reqW < 48 { // пол для разделителя/шапки
 		reqW = 48
 	}
@@ -90,9 +97,7 @@ func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
 	compassView := renderCompass(big)
 	big.mode = StatsMode
 	statsView := renderStats(big)
-	big.mode = FetchMode
-	fetchView := renderFetch(big)
-	for _, v := range []string{compassView, statsView, fetchView} {
+	for _, v := range []string{compassView, statsView} {
 		if w := maxContentWidth(v, canvas); w > reqW {
 			reqW = w
 		}
@@ -100,13 +105,11 @@ func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
 
 	// Высота: максимум по режимам. У списка высота зависит от переноса описания
 	// и «что повлияло», а те переносятся по ширине reqW — берём худший класс.
-	reqH := lineCount(compassView)
-	for _, v := range []string{statsView, fetchView} {
-		if h := lineCount(v); h > reqH {
-			reqH = h
-		}
+	reqH = lineCount(compassView)
+	if h := lineCount(statsView); h > reqH {
+		reqH = h
 	}
-	lm := Model{results: results, mode: ListMode, width: reqW, height: 400}
+	lm := Model{results: results, mode: ListMode, width: reqW, height: canvas}
 	if len(results) == 0 {
 		if h := lineCount(renderList(lm)); h > reqH {
 			reqH = h
@@ -118,7 +121,15 @@ func computeRequiredSize(results []detect.ArchetypeResult) (int, int) {
 			reqH = h
 		}
 	}
-	return reqW, reqH
+
+	// Суперфетч — отдельное требование на каждый под-режим.
+	for i, full := range []bool{false, true} {
+		fm := Model{mode: FetchMode, width: canvas, height: canvas, fetchFull: full}
+		fv := renderFetch(fm)
+		fetchReqW[i] = maxContentWidth(fv, canvas)
+		fetchReqH[i] = lineCount(fv)
+	}
+	return
 }
 
 func maxLineWidth(s string) int {
@@ -187,11 +198,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "Q", "й", "Й":
 			return m, tea.Quit
 		case "j", "о", "down":
-			if m.selected < len(m.results)-1 {
+			// В суперфетче ↑↓ циклично переключают детализацию (краткий/полный),
+			// в остальных режимах — листают список.
+			if m.mode == FetchMode {
+				m.fetchFull = !m.fetchFull
+			} else if m.selected < len(m.results)-1 {
 				m.selected++
 			}
 		case "k", "л", "up":
-			if m.selected > 0 {
+			if m.mode == FetchMode {
+				m.fetchFull = !m.fetchFull
+			} else if m.selected > 0 {
 				m.selected--
 			}
 		case "g", "п":
@@ -215,8 +232,18 @@ func (m Model) View() string {
 	if m.width == 0 && m.height == 0 {
 		return ""
 	}
-	if m.width < m.reqW || m.height < m.reqH {
-		return tooSmallView(m)
+	// Требование по размеру — базовое для всех режимов, кроме суперфетча:
+	// у него своё и зависит от под-режима (краткий/полный).
+	reqW, reqH := m.reqW, m.reqH
+	if m.mode == FetchMode {
+		i := 0
+		if m.fetchFull {
+			i = 1
+		}
+		reqW, reqH = m.fetchReqW[i], m.fetchReqH[i]
+	}
+	if m.width < reqW || m.height < reqH {
+		return tooSmallView(m, reqW, reqH)
 	}
 	switch m.mode {
 	case CompassMode:
@@ -232,13 +259,13 @@ func (m Model) View() string {
 
 // tooSmallView показывается, когда терминал меньше требуемого. При ресайзе окна
 // bubbletea перерисует View, и как только размер дорастёт — покажется утилита.
-func tooSmallView(m Model) string {
+func tooSmallView(m Model, reqW, reqH int) string {
 	curW := greenStyle
-	if m.width < m.reqW {
+	if m.width < reqW {
 		curW = redStyle
 	}
 	curH := greenStyle
-	if m.height < m.reqH {
+	if m.height < reqH {
 		curH = redStyle
 	}
 	cur := curW.Render(fmt.Sprintf("%d", m.width)) +
@@ -247,7 +274,7 @@ func tooSmallView(m Model) string {
 	lines := []string{
 		boldStyle.Render("🐧 Окно слишком маленькое"),
 		"",
-		fmt.Sprintf("Нужно: %s", greenStyle.Render(fmt.Sprintf("%d×%d", m.reqW, m.reqH))),
+		fmt.Sprintf("Нужно: %s", greenStyle.Render(fmt.Sprintf("%d×%d", reqW, reqH))),
 		fmt.Sprintf("Сейчас: %s", cur),
 		"",
 		dimStyle.Render("Увеличьте окно · q — выход"),
