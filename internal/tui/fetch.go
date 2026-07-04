@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,20 +29,24 @@ type fetchInfo struct {
 	HasInstall  bool
 
 	// Hardware
-	CPU       string
-	Cores     int
-	RAMUsed   string
-	RAMTotal  string
-	RAMPct    int
-	DiskPct   int
-	DiskUsed  string
-	DiskTotal string
-	HasDisk   bool
+	CPU        string
+	Cores      int
+	GPU        string
+	Resolution string // "1920x1080@60Hz" (или без @Гц, если частота неизвестна)
+	RAMUsed    string
+	RAMTotal   string
+	RAMPct     int
+	DiskPct    int
+	DiskUsed   string
+	DiskTotal  string
+	HasDisk    bool
 
 	// Software
 	Shell    string
 	DEWM     string
 	Packages int
+	FlatpakN int
+	SnapN    int
 }
 
 var (
@@ -136,6 +141,8 @@ func gatherFetch() fetchInfo {
 		fi.RAMUsed = humanGiB(used)
 		fi.RAMPct = used * 100 / memTotal
 	}
+	fi.GPU = gpuModel()
+	fi.Resolution = displayMode()
 	// Диск на корне: df -h /, берём последнюю строку (на случай переноса).
 	if out, err := exec.Command("df", "-h", "/").Output(); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -166,8 +173,102 @@ func gatherFetch() fetchInfo {
 		}
 	}
 	fi.Packages = pkgCount()
+	if cmdExists("flatpak") {
+		if out, err := exec.Command("flatpak", "list", "--app").Output(); err == nil {
+			fi.FlatpakN = countLines(string(out))
+		}
+	}
+	if cmdExists("snap") {
+		if out, err := exec.Command("snap", "list").Output(); err == nil {
+			if n := countLines(string(out)) - 1; n > 0 { // минус строка-заголовок
+				fi.SnapN = n
+			}
+		}
+	}
 
 	return fi
+}
+
+// countLines считает непустые строки вывода команды.
+func countLines(s string) int {
+	n := 0
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// gpuModel достаёт название видеокарты через lspci (0 — если lspci нет).
+func gpuModel() string {
+	if !cmdExists("lspci") {
+		return ""
+	}
+	out, err := exec.Command("lspci").Output()
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "VGA compatible controller") ||
+			strings.Contains(line, "3D controller") ||
+			strings.Contains(line, "Display controller") {
+			if i := strings.LastIndex(line, ": "); i >= 0 {
+				return cleanGPU(line[i+2:])
+			}
+		}
+	}
+	return ""
+}
+
+// cleanGPU сокращает строку lspci до узнаваемого имени карты.
+func cleanGPU(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, " (rev "); i >= 0 {
+		s = s[:i]
+	}
+	// Народное имя карты обычно в последних скобках: [GeForce RTX 3070].
+	if l := strings.LastIndex(s, "["); l >= 0 {
+		if r := strings.Index(s[l:], "]"); r > 1 {
+			return strings.TrimSpace(s[l+1 : l+r])
+		}
+	}
+	for _, t := range []string{" Corporation", ", Inc.", " Inc."} {
+		s = strings.ReplaceAll(s, t, "")
+	}
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// displayMode возвращает разрешение и частоту активного дисплея: сначала через
+// xrandr (X11/XWayland), затем через wlr-randr (wlroots). "" — если не удалось.
+func displayMode() string {
+	if cmdExists("xrandr") {
+		if out, err := exec.Command("xrandr", "--current").Output(); err == nil {
+			// строка вида: "   1920x1080     60.00*+  59.94 ..."
+			re := regexp.MustCompile(`(\d+x\d+)\s+([\d.]+)\*`)
+			if m := re.FindStringSubmatch(string(out)); m != nil {
+				return fmt.Sprintf("%s@%sHz", m[1], trimHz(m[2]))
+			}
+		}
+	}
+	if cmdExists("wlr-randr") {
+		if out, err := exec.Command("wlr-randr").Output(); err == nil {
+			// строка вида: "    1920x1080 px, 60.000000 Hz (current)"
+			re := regexp.MustCompile(`(\d+x\d+) px, ([\d.]+) Hz.*current`)
+			if m := re.FindStringSubmatch(string(out)); m != nil {
+				return fmt.Sprintf("%s@%sHz", m[1], trimHz(m[2]))
+			}
+		}
+	}
+	return ""
+}
+
+// trimHz округляет частоту "60.000000"/"59.94" до целого числа герц.
+func trimHz(s string) string {
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return strconv.Itoa(int(f + 0.5))
+	}
+	return s
 }
 
 func trimOSValue(s string) string {
@@ -330,9 +431,58 @@ var logoStyles = map[string]lipgloss.Style{
 
 var sectionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
 
-// fetchKV — строка «метка · значение» с выравниванием метки на ширину w.
+// fetchKV — строка «метка · значение» с выравниванием метки на ширину w
+// (с отступом слева — для краткого вида без рамок).
 func fetchKV(label, value string, w int) string {
 	return "  " + dimStyle.Render(padRight(label, w)) + value
+}
+
+// kvRow — как fetchKV, но без левого отступа (отступ даёт рамка секции).
+func kvRow(label, value string, w int) string {
+	return dimStyle.Render(padRight(label, w)) + value
+}
+
+// boxSection рисует секцию в рамке с заголовком на верхней грани:
+//
+//	╭─ OS ───────────────╮
+//	│ Distro   Arch Linux │
+//	╰─────────────────────╯
+//
+// contentW — общая внутренняя ширина (одинаковая у всех секций, чтобы рамки
+// были ровными). Рамка тусклая, заголовок — акцентный.
+func boxSection(title string, rows []string, contentW int) []string {
+	t := lipgloss.Width(title)
+	if contentW < t+2 {
+		contentW = t + 2
+	}
+	frame := dimStyle
+	top := frame.Render("╭─ ") + sectionStyle.Render(title) +
+		frame.Render(" "+strings.Repeat("─", contentW-t-1)+"╮")
+	out := []string{top}
+	for _, r := range rows {
+		out = append(out, frame.Render("│ ")+padRight(r, contentW)+frame.Render(" │"))
+	}
+	out = append(out, frame.Render("╰"+strings.Repeat("─", contentW+2)+"╯"))
+	return out
+}
+
+// contentWidth — максимальная видимая ширина среди строк секций и их заголовков
+// (заголовку нужно место title+2 на верхней грани).
+func contentWidth(titles []string, groups ...[]string) int {
+	w := 0
+	for _, g := range groups {
+		for _, r := range g {
+			if x := lipgloss.Width(r); x > w {
+				w = x
+			}
+		}
+	}
+	for _, tt := range titles {
+		if x := lipgloss.Width(tt) + 2; x > w {
+			w = x
+		}
+	}
+	return w
 }
 
 // usageBar — полоска заполнения (диск/ОЗУ): закрашенная часть по проценту
@@ -362,42 +512,56 @@ func fetchHeader(fi fetchInfo) []string {
 	}
 }
 
-// fetchInfoFull — подробный вид: секции OS / Hardware / Software.
+// fetchInfoFull — подробный вид: секции OS / Hardware / Software в рамках.
 func fetchInfoFull(fi fetchInfo) []string {
-	info := fetchHeader(fi)
-	kv := func(l, v string) string { return fetchKV(l, v, 13) }
+	kv := func(l, v string) string { return kvRow(l, v, 13) }
 
-	info = append(info, sectionStyle.Render("OS"))
-	info = append(info, kv("Distro", fi.Distro))
-	info = append(info, kv("Kernel", fi.Kernel))
+	osRows := []string{kv("Distro", fi.Distro), kv("Kernel", fi.Kernel)}
 	if fi.Uptime != "" {
-		info = append(info, kv("Uptime", fi.Uptime))
+		osRows = append(osRows, kv("Uptime", fi.Uptime))
 	}
 	if fi.HasInstall {
-		info = append(info, kv("Установлена", fi.InstallDate))
-		info = append(info, kv("Возраст", humanAge(fi.AgeDays)))
+		osRows = append(osRows,
+			kv("Установлена", fi.InstallDate),
+			kv("Возраст", humanAge(fi.AgeDays)))
 	}
 
-	info = append(info, sectionStyle.Render("Hardware"))
+	var hwRows []string
 	if fi.CPU != "" {
-		info = append(info, kv("CPU", fmt.Sprintf("%s (%d %s)",
+		hwRows = append(hwRows, kv("CPU", fmt.Sprintf("%s (%d %s)",
 			fi.CPU, fi.Cores, pluralRu(fi.Cores, "ядро", "ядра", "ядер"))))
 	}
+	if fi.GPU != "" {
+		hwRows = append(hwRows, kv("GPU", fi.GPU))
+	}
+	if fi.Resolution != "" {
+		hwRows = append(hwRows, kv("Display", fi.Resolution))
+	}
 	if fi.RAMTotal != "" {
-		info = append(info, kv("RAM", fmt.Sprintf("%s %d%%  %s / %s",
+		hwRows = append(hwRows, kv("RAM", fmt.Sprintf("%s %d%%  %s / %s",
 			usageBar(fi.RAMPct, 10), fi.RAMPct, fi.RAMUsed, fi.RAMTotal)))
 	}
 	if fi.HasDisk {
-		info = append(info, kv("Disk", fmt.Sprintf("%s %d%%  %s / %s",
+		hwRows = append(hwRows, kv("Disk", fmt.Sprintf("%s %d%%  %s / %s",
 			usageBar(fi.DiskPct, 10), fi.DiskPct, fi.DiskUsed, fi.DiskTotal)))
 	}
 
-	info = append(info, sectionStyle.Render("Software"))
-	info = append(info, kv("Shell", fi.Shell))
-	info = append(info, kv("DE/WM", fi.DEWM))
+	swRows := []string{kv("Shell", fi.Shell), kv("DE/WM", fi.DEWM)}
 	if fi.Packages > 0 {
-		info = append(info, kv("Пакетов", strconv.Itoa(fi.Packages)))
+		swRows = append(swRows, kv("Пакетов", strconv.Itoa(fi.Packages)))
 	}
+	if fi.FlatpakN > 0 {
+		swRows = append(swRows, kv("Flatpak", strconv.Itoa(fi.FlatpakN)))
+	}
+	if fi.SnapN > 0 {
+		swRows = append(swRows, kv("Snap", strconv.Itoa(fi.SnapN)))
+	}
+
+	cw := contentWidth([]string{"OS", "Hardware", "Software"}, osRows, hwRows, swRows)
+	info := fetchHeader(fi)
+	info = append(info, boxSection("OS", osRows, cw)...)
+	info = append(info, boxSection("Hardware", hwRows, cw)...)
+	info = append(info, boxSection("Software", swRows, cw)...)
 	return info
 }
 
