@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // shortCmds — короткая команда lx и её «слитные» формы с флагом.
@@ -105,11 +106,16 @@ func aliasDefined(name string) bool {
 }
 
 // ensureShortCommands создаёт симлинки коротких команд для свободных имён.
-// Дорогая часть выполняется один раз (маркер lxMarker); force — перепроверить.
+// Дорогая часть выполняется один раз, но маркер хранит СПИСОК настроенных
+// команд: если обновление добавило новые (напр. lxf/lxfm), набор не совпадёт с
+// маркером — и создание отработает ещё раз, а не пропустится по старому маркеру.
 func ensureShortCommands(force bool) {
 	marker := lxMarker()
-	if !force && markerExists(marker) {
-		return
+	want := strings.Join(shortCmds, " ")
+	if !force {
+		if data, err := os.ReadFile(marker); err == nil && strings.TrimSpace(string(data)) == want {
+			return
+		}
 	}
 	verbose := !markerExists(marker)
 
@@ -140,7 +146,7 @@ func ensureShortCommands(force bool) {
 			fmt.Fprintln(os.Stderr, "Создана короткая команда: lx (= lxprofile) и слитные формы lxu/lxs/lxc…")
 		}
 	}
-	writeMarker(marker, "")
+	writeMarker(marker, want)
 }
 
 // dedupe removes duplicate strings preserving order.
