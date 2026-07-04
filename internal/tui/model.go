@@ -64,7 +64,7 @@ type Model struct {
 }
 
 func NewModel(results []detect.ArchetypeResult, animate bool) Model {
-	m := Model{selected: 0, results: results, animating: animate, fetchFull: true}
+	m := Model{selected: 0, results: results, animating: animate, fetchFull: false}
 	m.reqW, m.reqH, m.fetchReqW, m.fetchReqH = computeRequiredSize(results)
 	return m
 }

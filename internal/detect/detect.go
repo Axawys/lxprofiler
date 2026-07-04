@@ -787,8 +787,8 @@ func detectGamer() {
 		if info, err := os.Stat(gd); err == nil && info.IsDir() {
 			entries, _ := os.ReadDir(gd)
 			count := len(entries)
-			if count >= 5 { Add("gamer", 12, fmt.Sprintf("каталог %s (%d шт.)", filepath.Base(gd), count))
-			} else if count >= 1 { Add("gamer", 8, fmt.Sprintf("каталог %s (%d шт.)", filepath.Base(gd), count)) }
+			if count >= 5 { Add("gamer", 12, fmt.Sprintf("~/%s (%d шт.)", filepath.Base(gd), count))
+			} else if count >= 1 { Add("gamer", 8, fmt.Sprintf("~/%s (%d шт.)", filepath.Base(gd), count)) }
 			break
 		}
 	}

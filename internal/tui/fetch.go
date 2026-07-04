@@ -594,53 +594,6 @@ func humanAge(days int) string {
 	return fmt.Sprintf("%d %s", days, plural(days, "day", "days"))
 }
 
-func splitLogo(s string) []string {
-	return strings.Split(strings.Trim(s, "\n"), "\n")
-}
-
-// Логотипы дистрибутивов (ASCII). Ключ — ID из os-release.
-var distroLogos = map[string][]string{
-	"arch": splitLogo(`
-      /\
-     /  \
-    /\   \
-   /  \   \
-  / /\ \   \
- /_/  \_\   \
-/_/    \_\___\`),
-	"fedora": splitLogo(`
-     ____
-    / __ \_
-   / /  \ \\
-  | | () | |
-  | |___/ /
-   \     /
-    \___/`),
-	"ubuntu": splitLogo(`
-      _
-    _(_)_
-   (_)'(_)
-  (_) _ (_)
-   (_)_(_)
-     (_)`),
-}
-
-// genericLogo — запасной пингвин для неизвестных дистрибутивов.
-var genericLogo = splitLogo(`
-   .--.
-  |o_o |
-  |:_/ |
- //   \ \
-(|     | )
-/'\_  _/'\
-\___)(___/`)
-
-var logoStyles = map[string]lipgloss.Style{
-	"arch":   lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
-	"fedora": lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
-	"ubuntu": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
-}
-
 var sectionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
 
 // fetchKV — строка «метка · значение» с выравниванием метки на ширину w
@@ -656,7 +609,7 @@ func kvRow(label, value string, w int) string {
 
 // boxSection рисует секцию в рамке с заголовком на верхней грани:
 //
-//	╭─ OS ───────────────╮
+//	╭─ OS ────────────────╮
 //	│ Distro   Arch Linux │
 //	╰─────────────────────╯
 //
@@ -726,7 +679,7 @@ func fetchHeader(fi fetchInfo) []string {
 
 // fetchInfoFull — подробный вид: секции OS / Hardware / Software в рамках.
 func fetchInfoFull(fi fetchInfo) []string {
-	kv := func(l, v string) string { return kvRow(l, v, 13) }
+	kv := func(l, v string) string { return kvRow(l, v, 7) }
 
 	osRows := []string{kv("Distro", fi.Distro), kv("Kernel", fi.Kernel)}
 	if fi.Uptime != "" {
@@ -734,7 +687,7 @@ func fetchInfoFull(fi fetchInfo) []string {
 	}
 	if fi.HasInstall {
 		osRows = append(osRows,
-			kv("Installed", fi.InstallDate),
+			kv("Birth", fi.InstallDate),
 			kv("Age", humanAge(fi.AgeDays)))
 	}
 
@@ -747,7 +700,7 @@ func fetchInfoFull(fi fetchInfo) []string {
 		hwRows = append(hwRows, kv("GPU", fi.GPU))
 	}
 	if fi.Display != "" {
-		hwRows = append(hwRows, kv("Display", fi.Display))
+		hwRows = append(hwRows, kv("Disp", fi.Display))
 	}
 	if fi.RAMTotal != "" {
 		hwRows = append(hwRows, kv("RAM", fmt.Sprintf("%s %d%%  %s / %s",
@@ -775,7 +728,7 @@ func fetchInfoFull(fi fetchInfo) []string {
 		pkgs = append(pkgs, fmt.Sprintf("snap %d", fi.SnapN))
 	}
 	if len(pkgs) > 0 {
-		swRows = append(swRows, kv("Packages", strings.Join(pkgs, " · ")))
+		swRows = append(swRows, kv("Pkgs", strings.Join(pkgs, " · ")))
 	}
 
 	cw := contentWidth([]string{"OS", "Hardware", "Software"}, osRows, hwRows, swRows)
@@ -800,10 +753,12 @@ func fetchInfoMinimal(fi fetchInfo) []string {
 		info = append(info, kv("CPU", fi.CPU))
 	}
 	if fi.RAMTotal != "" {
-		info = append(info, kv("RAM", fmt.Sprintf("%s %d%%", usageBar(fi.RAMPct, 10), fi.RAMPct)))
+		info = append(info, kv("RAM", fmt.Sprintf("%s  %s of %s",
+			usageBar(fi.RAMPct, 10), fi.RAMUsed, fi.RAMTotal)))
 	}
 	if fi.HasDisk {
-		info = append(info, kv("Disk", fmt.Sprintf("%s %d%%", usageBar(fi.DiskPct, 10), fi.DiskPct)))
+		info = append(info, kv("Disk", fmt.Sprintf("%s  %s of %s",
+			usageBar(fi.DiskPct, 10), fi.DiskUsed, fi.DiskTotal)))
 	}
 	return info
 }
@@ -811,17 +766,14 @@ func fetchInfoMinimal(fi fetchInfo) []string {
 func renderFetch(m Model) string {
 	fi := computeFetch()
 
-	logo := genericLogo
-	if l, ok := distroLogos[fi.DistroID]; ok {
-		logo = l
-	}
-	style := dimStyle
-	if s, ok := logoStyles[fi.DistroID]; ok {
-		style = s
-	}
+	key := logoKey(fi.DistroID)
+	// В кратком виде — компактный логотип; в подробном инфы много и окно
+	// большое, поэтому уместен крупный логотип.
+	logo := distroLogo(fi.DistroID, m.fetchFull)
+	// Видимая ширина считается без кодов цвета $N.
 	logoW := 0
 	for _, l := range logo {
-		if w := lipgloss.Width(l); w > logoW {
+		if w := lipgloss.Width(stripLogoCodes(l)); w > logoW {
 			logoW = w
 		}
 	}
@@ -845,12 +797,9 @@ func renderFetch(m Model) string {
 		if i < len(info) {
 			r = info[i]
 		}
-		sb.WriteString("  " + style.Render(padRight(l, logoW)) + "   " + r + "\n")
-	}
-	// Подсказка — только в полном виде; в кратком её не показываем.
-	if m.fetchFull {
-		sb.WriteString("\n")
-		sb.WriteString(dimStyle.Render("  ↑↓ min/full · ←→ mode · q quit"))
+		// Раскраска по кодам $N + добивка пробелами до ширины колонки логотипа.
+		pad := strings.Repeat(" ", logoW-lipgloss.Width(stripLogoCodes(l)))
+		sb.WriteString("  " + colorLogoLine(l, key) + pad + "   " + r + "\n")
 	}
 	return sb.String()
 }
