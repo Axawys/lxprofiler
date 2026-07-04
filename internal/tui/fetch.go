@@ -105,22 +105,6 @@ func gatherFetch() fetchInfo {
 			fi.Uptime = fmtUptime(sec)
 		}
 	}
-	// Дата установки: время рождения корня, иначе mtime /etc/machine-id.
-	installEpoch := 0
-	if out, err := exec.Command("stat", "-c", "%W", "/").Output(); err == nil {
-		fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &installEpoch)
-	}
-	if installEpoch == 0 {
-		if out, err := exec.Command("stat", "-c", "%Y", "/etc/machine-id").Output(); err == nil {
-			fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &installEpoch)
-		}
-	}
-	if installEpoch > 0 {
-		fi.InstallDate = time.Unix(int64(installEpoch), 0).Format("2006-01-02")
-		fi.AgeDays = (int(time.Now().Unix()) - installEpoch) / 86400
-		fi.HasInstall = true
-	}
-
 	// ── Hardware ───────────────────────────────────────
 	if d, err := os.ReadFile("/proc/cpuinfo"); err == nil {
 		for _, line := range strings.Split(string(d), "\n") {
@@ -154,42 +138,110 @@ func gatherFetch() fetchInfo {
 		fi.RAMUsed = humanGiB(used)
 		fi.RAMPct = used * 100 / memTotal
 	}
-	fi.GPU = gpuModel()
-	fi.Display = displayInfo()
-	// Диск на корне: df -h /, берём последнюю строку (на случай переноса).
-	if out, err := exec.Command("df", "-h", "/").Output(); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-		if len(lines) >= 2 {
-			f := strings.Fields(lines[len(lines)-1])
-			if len(f) >= 5 {
-				fi.DiskTotal = f[1]
-				fi.DiskUsed = f[2]
-				if p, err := strconv.Atoi(strings.TrimSuffix(f[4], "%")); err == nil {
-					fi.DiskPct = p
-					fi.HasDisk = true
-				}
-			}
-		}
+	// ── Внешние команды параллельно ────────────────────
+	// stat/df/lspci/xrandr/пакетный менеджер/flatpak/snap/--version независимы и
+	// в основном ждут I/O — запускаем разом, иначе открытие суперфетча тормозило
+	// бы почти секунду. Результаты пишутся в локальные переменные, в fi —
+	// последовательно после Wait (без гонок).
+	var (
+		wg                    sync.WaitGroup
+		instDate              string
+		instAge               int
+		instOK                bool
+		gpu, disp             string
+		shell, dewm, pkgKind  string
+		pkgN, flatpakN, snapN int
+		diskT, diskU          string
+		diskPct               int
+		diskOK                bool
+	)
+	run := func(f func()) {
+		wg.Add(1)
+		go func() { defer wg.Done(); f() }()
 	}
+	run(func() { instDate, instAge, instOK = installInfo() })
+	run(func() { gpu = gpuModel() })
+	run(func() { disp = displayInfo() })
+	run(func() { shell = shellInfo() })
+	run(func() { dewm = deWM() })
+	run(func() { pkgKind, pkgN = pkgInfo() })
+	run(func() { flatpakN = flatpakCount() })
+	run(func() { snapN = snapCount() })
+	run(func() { diskT, diskU, diskPct, diskOK = diskInfo() })
+	wg.Wait()
 
-	// ── Software ───────────────────────────────────────
-	fi.Shell = shellInfo()
-	fi.DEWM = deWM()
-	fi.PkgKind, fi.Packages = pkgInfo()
-	if cmdExists("flatpak") {
-		if out, err := exec.Command("flatpak", "list", "--app").Output(); err == nil {
-			fi.FlatpakN = countLines(string(out))
-		}
-	}
-	if cmdExists("snap") {
-		if out, err := exec.Command("snap", "list").Output(); err == nil {
-			if n := countLines(string(out)) - 1; n > 0 { // минус строка-заголовок
-				fi.SnapN = n
-			}
-		}
-	}
+	fi.InstallDate, fi.AgeDays, fi.HasInstall = instDate, instAge, instOK
+	fi.GPU, fi.Display = gpu, disp
+	fi.Shell, fi.DEWM = shell, dewm
+	fi.PkgKind, fi.Packages = pkgKind, pkgN
+	fi.FlatpakN, fi.SnapN = flatpakN, snapN
+	fi.DiskTotal, fi.DiskUsed, fi.DiskPct, fi.HasDisk = diskT, diskU, diskPct, diskOK
 
 	return fi
+}
+
+// installInfo — дата установки системы: время рождения корня, иначе mtime
+// /etc/machine-id. Возвращает дату, возраст в днях и признак наличия.
+func installInfo() (date string, ageDays int, ok bool) {
+	epoch := 0
+	if out, err := exec.Command("stat", "-c", "%W", "/").Output(); err == nil {
+		fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &epoch)
+	}
+	if epoch == 0 {
+		if out, err := exec.Command("stat", "-c", "%Y", "/etc/machine-id").Output(); err == nil {
+			fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &epoch)
+		}
+	}
+	if epoch == 0 {
+		return "", 0, false
+	}
+	return time.Unix(int64(epoch), 0).Format("2006-01-02"),
+		(int(time.Now().Unix()) - epoch) / 86400, true
+}
+
+// diskInfo — заполненность корневого раздела через df -h /.
+func diskInfo() (total, used string, pct int, ok bool) {
+	out, err := exec.Command("df", "-h", "/").Output()
+	if err != nil {
+		return
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) < 2 {
+		return
+	}
+	f := strings.Fields(lines[len(lines)-1]) // последняя строка — на случай переноса
+	if len(f) < 5 {
+		return
+	}
+	p, err := strconv.Atoi(strings.TrimSuffix(f[4], "%"))
+	if err != nil {
+		return f[1], f[2], 0, false
+	}
+	return f[1], f[2], p, true
+}
+
+// flatpakCount / snapCount — число установленных приложений соответствующих
+// систем (0, если менеджер не установлен).
+func flatpakCount() int {
+	if !cmdExists("flatpak") {
+		return 0
+	}
+	if out, err := exec.Command("flatpak", "list", "--app").Output(); err == nil {
+		return countLines(string(out))
+	}
+	return 0
+}
+
+func snapCount() int {
+	if !cmdExists("snap") {
+		return 0
+	}
+	if out, err := exec.Command("snap", "list").Output(); err == nil {
+		if n := countLines(string(out)) - 1; n > 0 { // минус строка-заголовок
+			return n
+		}
+	}
+	return 0
 }
 
 // countLines считает непустые строки вывода команды.

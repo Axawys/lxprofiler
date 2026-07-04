@@ -108,17 +108,31 @@ func sampleResults() []detect.ArchetypeResult {
 }
 
 func TestRequiredSizePositive(t *testing.T) {
-	w, h, fw, fh := computeRequiredSize(sampleResults())
+	w, h := computeRequiredSize(sampleResults())
 	if w < 48 {
 		t.Errorf("reqW = %d, want >= 48 (floor)", w)
 	}
 	if h < 10 {
 		t.Errorf("reqH = %d, want >= 10", h)
 	}
-	for i := range fw {
-		if fw[i] < 1 || fh[i] < 1 {
-			t.Errorf("fetchReq[%d] = %dx%d, want positive", i, fw[i], fh[i])
-		}
+}
+
+func TestFetchReqLazy(t *testing.T) {
+	// Требование суперфетча не считается при создании модели (ленивое),
+	// а вычисляется при входе в режим.
+	m := NewModel(sampleResults(), false)
+	if m.fetchReqW[0] != 0 || m.fetchReqW[1] != 0 {
+		t.Errorf("fetchReq computed eagerly: %v", m.fetchReqW)
+	}
+	m.fetchFull = false
+	m = m.ensureFetchReq()
+	if m.fetchReqW[0] < 1 || m.fetchReqH[0] < 1 {
+		t.Errorf("fetchReq[0] = %dx%d, want positive", m.fetchReqW[0], m.fetchReqH[0])
+	}
+	m.fetchFull = true
+	m = m.ensureFetchReq()
+	if m.fetchReqW[1] < 1 || m.fetchReqH[1] < 1 {
+		t.Errorf("fetchReq[1] = %dx%d, want positive", m.fetchReqW[1], m.fetchReqH[1])
 	}
 }
 

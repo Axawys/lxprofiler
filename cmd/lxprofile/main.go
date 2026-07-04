@@ -15,7 +15,7 @@ import (
 
 // Version — версия сборки. По умолчанию для локальной сборки; на релизе
 // подставляется линкером: go build -ldflags "-X main.Version=X.Y.Z".
-var Version = "5.8.0"
+var Version = "5.8.1"
 
 func main() {
 	args := os.Args[1:]

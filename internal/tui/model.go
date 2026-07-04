@@ -65,15 +65,15 @@ type Model struct {
 
 func NewModel(results []detect.ArchetypeResult, animate bool) Model {
 	m := Model{selected: 0, results: results, animating: animate, fetchFull: false}
-	m.reqW, m.reqH, m.fetchReqW, m.fetchReqH = computeRequiredSize(results)
+	m.reqW, m.reqH = computeRequiredSize(results)
 	return m
 }
 
-// computeRequiredSize считает минимальный размер терминала по режимам. Базовое
-// требование (reqW/reqH) — максимум по списку/координатам/статистике; суперфетч
-// имеет отдельное требование на каждый под-режим (краткий/полный), чтобы его
-// размеры не влияли на остальные режимы. Считается один раз при создании модели.
-func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int, fetchReqW, fetchReqH [2]int) {
+// computeRequiredSize считает минимальный размер терминала для базовых режимов
+// (список/координаты/статистика) — максимум по ним. Требование суперфетча
+// считается отдельно и лениво (см. ensureFetchReq), чтобы тяжёлый сбор системной
+// инфы не замедлял запуск. Считается один раз при создании модели.
+func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int) {
 	// Ширина строки списка: "▶ " + метка + добивка + "  100%  " + бар(20).
 	maxLabel := 0
 	for _, r := range results {
@@ -121,15 +121,25 @@ func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int, fetc
 			reqH = h
 		}
 	}
-
-	// Суперфетч — отдельное требование на каждый под-режим.
-	for i, full := range []bool{false, true} {
-		fm := Model{mode: FetchMode, width: canvas, height: canvas, fetchFull: full}
-		fv := renderFetch(fm)
-		fetchReqW[i] = maxContentWidth(fv, canvas)
-		fetchReqH[i] = lineCount(fv)
-	}
 	return
+}
+
+// ensureFetchReq лениво считает требование размера для текущего под-режима
+// суперфетча (краткий/полный). Тяжёлый сбор системной инфы (df, lspci, счётчики
+// пакетов, flatpak/snap…) откладывается до первого входа в суперфетч, чтобы не
+// замедлять запуск; результат кешируется в модели и в fetchOnce.
+func (m Model) ensureFetchReq() Model {
+	i := 0
+	if m.fetchFull {
+		i = 1
+	}
+	if m.fetchReqW[i] == 0 {
+		const canvas = 400
+		fv := renderFetch(Model{mode: FetchMode, width: canvas, height: canvas, fetchFull: m.fetchFull})
+		m.fetchReqW[i] = maxContentWidth(fv, canvas)
+		m.fetchReqH[i] = lineCount(fv)
+	}
+	return m
 }
 
 func maxLineWidth(s string) int {
@@ -223,6 +233,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+	}
+	// Требование суперфетча считаем лениво — только когда пользователь реально
+	// в этом режиме (первый вход запускает сбор системной инфы).
+	if m.mode == FetchMode {
+		m = m.ensureFetchReq()
 	}
 	return m, nil
 }
