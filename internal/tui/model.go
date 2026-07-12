@@ -35,13 +35,12 @@ type Mode int
 
 const (
 	ListMode Mode = iota
-	CompassMode
 	StatsMode
 	FetchMode
 )
 
 // modeCount — число режимов для циклического переключения ←/→.
-const modeCount = 4
+const modeCount = 3
 
 type Model struct {
 	selected int
@@ -49,7 +48,7 @@ type Model struct {
 	results  []detect.ArchetypeResult
 	width    int
 	height   int
-	reqW     int // минимальная ширина для списка/координат/статистики
+	reqW     int // минимальная ширина для списка/статистики
 	reqH     int // минимальная высота для них же
 
 	// Суперфетч со своим требованием по размеру — оно применяется только в
@@ -70,9 +69,9 @@ func NewModel(results []detect.ArchetypeResult, animate bool) Model {
 }
 
 // computeRequiredSize считает минимальный размер терминала для базовых режимов
-// (список/координаты/статистика) — максимум по ним. Требование суперфетча
-// считается отдельно и лениво (см. ensureFetchReq), чтобы тяжёлый сбор системной
-// инфы не замедлял запуск. Считается один раз при создании модели.
+// (список/статистика) — максимум по ним. Требование суперфетча считается
+// отдельно и лениво (см. ensureFetchReq), чтобы тяжёлый сбор системной инфы не
+// замедлял запуск. Считается один раз при создании модели.
 func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int) {
 	// Ширина строки списка: "▶ " + метка + добивка + "  100%  " + бар(20).
 	maxLabel := 0
@@ -86,29 +85,21 @@ func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int) {
 		reqW = 48
 	}
 
-	// Координаты и статистика по ширине не переносятся — берём их натуральную
-	// ширину, отрисовав на заведомо большом «холсте». Заголовок-линейка
-	// (titleRule) тянется во всю ширину холста — она адаптивна и не должна
-	// задавать минимально требуемую ширину, поэтому строки длиной с холст
-	// (== canvas) при измерении пропускаем.
+	// Статистика по ширине не переносится — берём её натуральную ширину, отрисовав
+	// на заведомо большом «холсте». Заголовок-линейка (titleRule) тянется во всю
+	// ширину холста — она адаптивна и не должна задавать минимально требуемую
+	// ширину, поэтому строки длиной с холст (== canvas) при измерении пропускаем.
 	const canvas = 400
 	big := Model{results: results, width: canvas, height: canvas}
-	big.mode = CompassMode
-	compassView := renderCompass(big)
 	big.mode = StatsMode
 	statsView := renderStats(big)
-	for _, v := range []string{compassView, statsView} {
-		if w := maxContentWidth(v, canvas); w > reqW {
-			reqW = w
-		}
+	if w := maxContentWidth(statsView, canvas); w > reqW {
+		reqW = w
 	}
 
 	// Высота: максимум по режимам. У списка высота зависит от переноса описания
 	// и «что повлияло», а те переносятся по ширине reqW — берём худший класс.
-	reqH = lineCount(compassView)
-	if h := lineCount(statsView); h > reqH {
-		reqH = h
-	}
+	reqH = lineCount(statsView)
 	lm := Model{results: results, mode: ListMode, width: reqW, height: canvas}
 	if len(results) == 0 {
 		if h := lineCount(renderList(lm)); h > reqH {
@@ -261,8 +252,6 @@ func (m Model) View() string {
 		return tooSmallView(m, reqW, reqH)
 	}
 	switch m.mode {
-	case CompassMode:
-		return renderCompass(m)
 	case StatsMode:
 		return renderStats(m)
 	case FetchMode:
