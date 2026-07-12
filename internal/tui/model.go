@@ -120,15 +120,15 @@ func NewModel(results []detect.ArchetypeResult, animate bool) Model {
 // отдельно и лениво (см. ensureFetchReq), чтобы тяжёлый сбор системной инфы не
 // замедлял запуск. Считается один раз при создании модели.
 func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int) {
-	// Строка списка внутри панели: отступ+рамка (6) + «▶ » (2) + метка + добивка
-	// + «  » (2) + «100» (3) + «%» (1) + «  » (2) + бар (20).
+	// Строка списка: «▶ » (2) + метка + добивка + «  » (2) + «100» (3) + «%» (1)
+	// + «  » (2) + бар (20). Список без рамки, поэтому отступа рамки нет.
 	maxLabel := 0
 	for _, r := range results {
 		if w := lipgloss.Width(r.Label); w > maxLabel {
 			maxLabel = w
 		}
 	}
-	reqW = 6 + 2 + maxLabel + 2 + 3 + 1 + 2 + 20
+	reqW = 2 + maxLabel + 2 + 3 + 1 + 2 + 20
 	if reqW < 48 {
 		reqW = 48
 	}

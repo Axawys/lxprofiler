@@ -75,8 +75,9 @@ func renderList(m Model) string {
 	return pinTabBar(listBody(m), m)
 }
 
-// listBody собирает основной режим: панель со списком архетипов и панель с
-// деталями выбранного. Панель вкладок добавляет pinTabBar.
+// listBody собирает основной режим: список архетипов и панель с деталями
+// выбранного. Сам список без рамки (её граница = верх панели деталей), чтобы
+// вписаться в требование высоты 27; детали — в рамке. Вкладки добавит pinTabBar.
 func listBody(m Model) []string {
 	rows := m.orderedResults()
 	maxLen := 0
@@ -85,14 +86,13 @@ func listBody(m Model) []string {
 			maxLen = l
 		}
 	}
-	inner := m.width - 6 // 2 отступ панели + рамка «│ » и « │»
-	// Ширина полоски: остаток строки после «▶ » + метка + добивка + «  100%  ».
-	barW := inner - (maxLen + 10)
-	if barW < 12 {
-		barW = 12
+	// Полоска тянется до правого края: ширина минус «▶ » + метка + «  100%  ».
+	barW := m.width - (maxLen + 10)
+	if barW < 20 {
+		barW = 20
 	}
 
-	bars := make([]string, len(rows))
+	var content []string
 	for i, r := range rows {
 		label := r.Label
 		pct := r.NormScore
@@ -116,18 +116,17 @@ func listBody(m Model) []string {
 		}
 		text := fmt.Sprintf("%s%s%*s  %s%%  %s", marker, label, pad, "", pf, bar)
 		if selected {
-			bars[i] = greenStyle.Render(text)
+			content = append(content, greenStyle.Render(text))
 		} else {
-			bars[i] = dimStyle.Render(text)
+			content = append(content, dimStyle.Render(text))
 		}
 	}
-	content := panel("Архетипы", bars, inner)
 
 	if m.selected < len(rows) {
 		r := rows[m.selected]
+		inner := m.width - 6 // 2 отступ панели + рамка «│ » и « │»
 		var d []string
 		d = append(d, wrapLines(data.Describe(r.Key, r.NormScore), inner, lipgloss.NewStyle())...)
-		d = append(d, "")
 		d = append(d, boldStyle.Render("Что повлияло:"))
 		d = append(d, wrapLines(r.Reason, inner, dimStyle)...)
 		content = append(content, panel(fmt.Sprintf("%s — %d%%", r.Label, r.NormScore), d, inner)...)
