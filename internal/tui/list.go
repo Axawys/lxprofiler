@@ -145,7 +145,6 @@ func renderList(m Model) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("\n")
 	sb.WriteString(dimStyle.Render("  ↑↓ — листать · ←→ — режим · q — выход"))
 
 	return sb.String()
