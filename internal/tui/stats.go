@@ -426,31 +426,24 @@ func sudoQuip(spanSec, sudoCount int) string {
 }
 
 func renderStats(m Model) string {
-	var sb strings.Builder
+	return pinTabBar(statsBody(m), m)
+}
 
+// statsBody собирает забавную статистику панелями: шапка со сводкой, «Топ
+// команд», «Активность» и «Битвы». Панель вкладок добавляет pinTabBar.
+func statsBody(m Model) []string {
 	s := computeStats()
-
-	sb.WriteString(titleRule("📊 Забавная статистика", m.width))
-	sb.WriteString("\n")
-
 	if !s.HasHistory {
-		sb.WriteString(dimStyle.Render("  История команд пуста или недоступна."))
-		sb.WriteString("\n")
-		sb.WriteString(dimStyle.Render("  Подсказка: включи HISTTIMEFORMAT — и время будет точнее."))
-		sb.WriteString("\n\n")
-		sb.WriteString(dimStyle.Render("  ↑↓ — листать · ←→ — режим · q — выход"))
-		return sb.String()
+		return []string{
+			dimStyle.Render("  История команд пуста или недоступна."),
+			dimStyle.Render("  Подсказка: включи HISTTIMEFORMAT — и время будет точнее."),
+		}
 	}
 
 	spanSec := s.SpanDays * 86400
-	sb.WriteString(fmt.Sprintf("  %s команд · %s уникальных · %s\n\n",
-		boldStyle.Render(fmt.Sprintf("%d", s.TotalCmds)),
-		boldStyle.Render(fmt.Sprintf("%d", s.UniqueCmds)),
-		dimStyle.Render(fmt.Sprintf("охват ~%d дн.", s.SpanDays))))
 
 	// Топ команд — ранг, имя (выровнено), счётчик, частота.
-	sb.WriteString(cyanStyle.Render("  Топ команд"))
-	sb.WriteString("\n")
+	var top []string
 	for i, c := range s.TopCmds {
 		name := padRight(c.Cmd, 12)
 		if i == 0 {
@@ -458,16 +451,16 @@ func renderStats(m Model) string {
 		} else {
 			name = boldStyle.Render(name)
 		}
-		sb.WriteString(fmt.Sprintf("    %d. %s %s  %s\n",
+		top = append(top, fmt.Sprintf("%d. %s %s  %s",
 			i+1, name,
 			boldStyle.Render(padLeft(fmt.Sprintf("%d×", c.Count), 5)),
 			dimStyle.Render(freq(c.Count, spanSec))))
 	}
-	sb.WriteString("\n")
 
-	// Метрики одним выровненным столбцом: метка · счётчик · частота · комментарий.
+	// Активность — метка · счётчик · частота · комментарий.
+	var act []string
 	metric := func(label string, count int, freqTxt, quip string) {
-		sb.WriteString(fmt.Sprintf("  %s %s %s %s\n",
+		act = append(act, fmt.Sprintf("%s %s %s %s",
 			padRight(label, 11),
 			boldStyle.Render(padLeft(fmt.Sprintf("%d×", count), 5)),
 			dimStyle.Render(padRight(freqTxt, 13)),
@@ -478,34 +471,44 @@ func renderStats(m Model) string {
 	metric("sudo/doas", s.SudoCount, freq(s.SudoCount, spanSec), sudoQuip(spanSec, s.SudoCount))
 	metric("rm -rf", s.RMRFCount, freq(s.RMRFCount, spanSec), rmrfQuip(spanSec, s.RMRFCount))
 	metric("опечатки", s.TypoCount, "", "sl, gti, claer, cd..…")
-	sb.WriteString("\n")
 
-	// Редактор-война — все редакторы, встреченные в истории, по убыванию.
+	// Битвы — редакторы и браузеры.
+	var battles []string
 	var edItems []battleItem
 	for name, cnt := range s.Editors {
 		edItems = append(edItems, battleItem{name, cnt, strconv.Itoa(cnt)})
 	}
-	edLine := battleLine("Редактор-война", edItems)
-	if edLine == "" { // ни одного редактора в истории
-		edLine = fmt.Sprintf("  %s  %s\n",
-			boldStyle.Render(padRight("Редактор-война", 15)),
-			dimStyle.Render("все мимо — GUI?"))
+	if line := battleLine("Редактор-война", edItems); line != "" {
+		battles = append(battles, line)
+	} else {
+		battles = append(battles, boldStyle.Render(padRight("Редактор-война", 15))+
+			"  "+dimStyle.Render("все мимо — GUI?"))
 	}
-	sb.WriteString(edLine)
-
-	// Битва браузеров — по объёму кеша.
 	var brItems []battleItem
 	for name, kb := range s.BrowserCache {
 		brItems = append(brItems, battleItem{name, kb, humanKB(kb)})
 	}
 	if line := battleLine("Битва браузеров", brItems); line != "" {
-		sb.WriteString(line)
+		battles = append(battles, line)
 	}
 
-	sb.WriteString("\n")
-	sb.WriteString(dimStyle.Render("  ↑↓ — листать · ←→ — режим · q — выход"))
+	// Единая внутренняя ширина панелей — по самому широкому содержимому.
+	inner := contentWidth([]string{"Топ команд", "Активность", "Битвы"}, top, act, battles)
+	if max := m.width - 6; inner > max {
+		inner = max
+	}
 
-	return sb.String()
+	content := []string{
+		fmt.Sprintf("  %s команд · %s уникальных · %s",
+			boldStyle.Render(fmt.Sprintf("%d", s.TotalCmds)),
+			boldStyle.Render(fmt.Sprintf("%d", s.UniqueCmds)),
+			dimStyle.Render(fmt.Sprintf("охват ~%d дн.", s.SpanDays))),
+		"",
+	}
+	content = append(content, panel("Топ команд", top, inner)...)
+	content = append(content, panel("Активность", act, inner)...)
+	content = append(content, panel("Битвы", battles, inner)...)
+	return content
 }
 
 type battleItem struct {
@@ -551,7 +554,7 @@ func battleLine(title string, items []battleItem) string {
 	if ties > 1 {
 		winner = "→ ничья"
 	}
-	return fmt.Sprintf("  %s  %s  %s\n",
+	return fmt.Sprintf("%s  %s  %s",
 		boldStyle.Render(padRight(title, 15)),
 		strings.Join(parts, dimStyle.Render(" · ")),
 		greenStyle.Render(winner))

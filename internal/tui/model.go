@@ -42,6 +42,53 @@ const (
 // modeCount — число режимов для циклического переключения ←/→.
 const modeCount = 3
 
+// tabBar — нижняя строка списка/статистики: точки-вкладки и подсказка. Порядок
+// точек слева направо: суперфетч, основной список, статистика; активная вкладка
+// подсвечена. В суперфетче панель не показывается (там своя вёрстка).
+func tabBar(cur Mode) string {
+	order := []Mode{FetchMode, ListMode, StatsMode}
+	dots := make([]string, len(order))
+	for i, mo := range order {
+		if mo == cur {
+			dots[i] = cyanStyle.Render("●")
+		} else {
+			dots[i] = dimStyle.Render("○")
+		}
+	}
+	return "  " + strings.Join(dots, " ") +
+		dimStyle.Render("   ↑↓ — листать · ←→ — режим · q — выход")
+}
+
+// pinTabBar пришпиливает панель вкладок к нижней строке экрана: контент сверху,
+// добивка пустыми строками, вкладки — последней строкой. Так точки-вкладки
+// всегда на одной высоте при переключении режимов и не «скачут».
+func pinTabBar(content []string, m Model) string {
+	for len(content) < m.height-1 {
+		content = append(content, "")
+	}
+	content = append(content, tabBar(m.mode))
+	return strings.Join(content, "\n")
+}
+
+// panel рисует рамку-секцию (boxSection) с отступом слева на 2 — как остальная
+// вёрстка режимов.
+func panel(title string, rows []string, inner int) []string {
+	out := boxSection(title, rows, inner)
+	for i := range out {
+		out[i] = "  " + out[i]
+	}
+	return out
+}
+
+// wrapLines переносит текст по ширине width и красит каждую строку стилем st.
+func wrapLines(text string, width int, st lipgloss.Style) []string {
+	var out []string
+	for _, ln := range strings.Split(wrapText(text, width), "\n") {
+		out = append(out, st.Render(ln))
+	}
+	return out
+}
+
 type Model struct {
 	selected int
 	mode     Mode
@@ -73,44 +120,46 @@ func NewModel(results []detect.ArchetypeResult, animate bool) Model {
 // отдельно и лениво (см. ensureFetchReq), чтобы тяжёлый сбор системной инфы не
 // замедлял запуск. Считается один раз при создании модели.
 func computeRequiredSize(results []detect.ArchetypeResult) (reqW, reqH int) {
-	// Ширина строки списка: "▶ " + метка + добивка + "  100%  " + бар(20).
+	// Строка списка внутри панели: отступ+рамка (6) + «▶ » (2) + метка + добивка
+	// + «  » (2) + «100» (3) + «%» (1) + «  » (2) + бар (20).
 	maxLabel := 0
 	for _, r := range results {
 		if w := lipgloss.Width(r.Label); w > maxLabel {
 			maxLabel = w
 		}
 	}
-	reqW = 2 + maxLabel + 2 + 3 + 1 + 2 + 20
-	if reqW < 48 { // пол для разделителя/шапки
+	reqW = 6 + 2 + maxLabel + 2 + 3 + 1 + 2 + 20
+	if reqW < 48 {
 		reqW = 48
 	}
 
-	// Статистика по ширине не переносится — берём её натуральную ширину, отрисовав
-	// на заведомо большом «холсте». Заголовок-линейка (titleRule) тянется во всю
-	// ширину холста — она адаптивна и не должна задавать минимально требуемую
-	// ширину, поэтому строки длиной с холст (== canvas) при измерении пропускаем.
+	// Статистика: панели шире, чем список меток, — берём их натуральную ширину,
+	// собрав тело на заведомо большом «холсте». Строки во всю ширину холста
+	// (== canvas) пропускаем: они не задают минимально требуемую ширину.
 	const canvas = 400
-	big := Model{results: results, width: canvas, height: canvas}
-	big.mode = StatsMode
-	statsView := renderStats(big)
-	if w := maxContentWidth(statsView, canvas); w > reqW {
-		reqW = w
+	sBody := statsBody(Model{results: results, mode: StatsMode, width: canvas, height: canvas})
+	for _, l := range sBody {
+		if w := lipgloss.Width(l); w < canvas && w > reqW {
+			reqW = w
+		}
 	}
 
-	// Высота: максимум по режимам. У списка высота зависит от переноса описания
-	// и «что повлияло», а те переносятся по ширине reqW — берём худший класс.
-	reqH = lineCount(statsView)
+	// Высота: максимум по режимам плюс строка панели вкладок (её добавит
+	// pinTabBar). У списка высота зависит от переноса описания/«что повлияло»,
+	// а те переносятся по ширине reqW — берём худший класс.
+	reqH = len(sBody) + 1
 	lm := Model{results: results, mode: ListMode, width: reqW, height: canvas}
-	if len(results) == 0 {
-		if h := lineCount(renderList(lm)); h > reqH {
+	worst := func() {
+		if h := len(listBody(lm)) + 1; h > reqH {
 			reqH = h
 		}
+	}
+	if len(results) == 0 {
+		worst()
 	}
 	for sel := range results {
 		lm.selected = sel
-		if h := lineCount(renderList(lm)); h > reqH {
-			reqH = h
-		}
+		worst()
 	}
 	return
 }
@@ -346,18 +395,6 @@ func padLeft(s string, w int) string {
 		return strings.Repeat(" ", d) + s
 	}
 	return s
-}
-
-// titleRule рисует заголовок секции и добивает строку линией до правого края:
-//
-//	  📊 Заголовок ───────────────────────────────
-func titleRule(title string, width int) string {
-	head := "  " + title + " "
-	rem := width - lipgloss.Width(head)
-	if rem < 1 {
-		rem = 1
-	}
-	return "  " + boldStyle.Render(title) + " " + dimStyle.Render(strings.Repeat("─", rem))
 }
 
 func wrapText(text string, width int) string {

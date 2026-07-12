@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/Axawys/lxprofiler/internal/data"
 	"github.com/Axawys/lxprofiler/internal/detect"
 )
@@ -65,39 +67,96 @@ func (m Model) orderedResults() []detect.ArchetypeResult {
 }
 
 func renderList(m Model) string {
-	var sb strings.Builder
-	rows := m.orderedResults()
+	// Во время анимации — только «гонка» полосок без рамок и панелей (они
+	// прыгали бы при переупорядочивании классов).
+	if m.animating {
+		return renderRacing(m)
+	}
+	return pinTabBar(listBody(m), m)
+}
 
+// listBody собирает основной режим: панель со списком архетипов и панель с
+// деталями выбранного. Панель вкладок добавляет pinTabBar.
+func listBody(m Model) []string {
+	rows := m.orderedResults()
 	maxLen := 0
 	for _, r := range rows {
-		if len([]rune(r.Label)) > maxLen {
-			maxLen = len([]rune(r.Label))
+		if l := len([]rune(r.Label)); l > maxLen {
+			maxLen = l
 		}
 	}
-
-	// Полоска тянется до правого края: ширина окна минус префикс строки
-	// ("▶ " + метка + добивка + "  100%  "). Минимум 20, чтобы не схлопывалась.
-	barW := m.width - (maxLen + 10)
-	if barW < 20 {
-		barW = 20
+	inner := m.width - 6 // 2 отступ панели + рамка «│ » и « │»
+	// Ширина полоски: остаток строки после «▶ » + метка + добивка + «  100%  ».
+	barW := inner - (maxLen + 10)
+	if barW < 12 {
+		barW = 12
 	}
 
-	// Прогресс анимации: полоски и проценты заполняются от 0 до финала.
-	prog := 1.0
-	if m.animating {
-		prog = m.animProgress
-	}
-
+	bars := make([]string, len(rows))
 	for i, r := range rows {
 		label := r.Label
 		pct := r.NormScore
-		selected := !m.animating && i == m.selected
-
+		selected := i == m.selected
 		if data.Mystery[r.Key] && !selected {
 			label = maskLabel(label)
 			pct = -1
 		}
+		var bar, pf string
+		if pct < 0 {
+			bar = makeBrokenBar(barW)
+			pf = "???"
+		} else {
+			bar = makeBar(pct, barW)
+			pf = fmt.Sprintf("%3d", pct)
+		}
+		pad := maxLen - len([]rune(label))
+		marker := "  "
+		if selected {
+			marker = "▶ "
+		}
+		text := fmt.Sprintf("%s%s%*s  %s%%  %s", marker, label, pad, "", pf, bar)
+		if selected {
+			bars[i] = greenStyle.Render(text)
+		} else {
+			bars[i] = dimStyle.Render(text)
+		}
+	}
+	content := panel("Архетипы", bars, inner)
 
+	if m.selected < len(rows) {
+		r := rows[m.selected]
+		var d []string
+		d = append(d, wrapLines(data.Describe(r.Key, r.NormScore), inner, lipgloss.NewStyle())...)
+		d = append(d, "")
+		d = append(d, boldStyle.Render("Что повлияло:"))
+		d = append(d, wrapLines(r.Reason, inner, dimStyle)...)
+		content = append(content, panel(fmt.Sprintf("%s — %d%%", r.Label, r.NormScore), d, inner)...)
+	}
+	return content
+}
+
+// renderRacing — экран анимации: полоски классов «догоняют» свои значения.
+func renderRacing(m Model) string {
+	var sb strings.Builder
+	rows := m.orderedResults()
+	maxLen := 0
+	for _, r := range rows {
+		if l := len([]rune(r.Label)); l > maxLen {
+			maxLen = l
+		}
+	}
+	barW := m.width - (maxLen + 10)
+	if barW < 20 {
+		barW = 20
+	}
+	prog := m.animProgress
+	for _, r := range rows {
+		label := r.Label
+		pct := r.NormScore
+		if data.Mystery[r.Key] {
+			label = maskLabel(label)
+			pct = -1
+		}
 		var bar, pf string
 		if pct < 0 {
 			bar = growBrokenBar(barW, prog)
@@ -108,44 +167,10 @@ func renderList(m Model) string {
 			pf = fmt.Sprintf("%3d", dp)
 		}
 		pad := maxLen - len([]rune(label))
-
-		var line string
-		if selected {
-			line = greenStyle.Render(fmt.Sprintf("▶ %s%*s  %s%%  %s", label, pad, "", pf, bar))
-		} else {
-			line = dimStyle.Render(fmt.Sprintf("  %s%*s  %s%%  %s", label, pad, "", pf, bar))
-		}
-		sb.WriteString(line)
+		sb.WriteString(dimStyle.Render(fmt.Sprintf("  %s%*s  %s%%  %s", label, pad, "", pf, bar)))
 		sb.WriteString("\n")
 	}
-
-	// Во время анимации — только гонка полосок и подсказка (панель деталей
-	// прыгала бы при переупорядочивании).
-	if m.animating {
-		sb.WriteString("\n")
-		sb.WriteString(dimStyle.Render("  q — выход"))
-		return sb.String()
-	}
-
-	sb.WriteString(dimStyle.Render(strings.Repeat("─", m.width)))
 	sb.WriteString("\n")
-
-	if m.selected < len(rows) {
-		r := rows[m.selected]
-		sb.WriteString(boldStyle.Render(fmt.Sprintf("▶ %s — %d%%", r.Label, r.NormScore)))
-		sb.WriteString("\n")
-
-		desc := data.Describe(r.Key, r.NormScore)
-		sb.WriteString("  " + wrapText(desc, m.width-4))
-		sb.WriteString("\n")
-
-		sb.WriteString(boldStyle.Render("  Что повлияло:"))
-		sb.WriteString("\n")
-		sb.WriteString("  " + dimStyle.Render(wrapText(r.Reason, m.width-4)))
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString(dimStyle.Render("  ↑↓ — листать · ←→ — режим · q — выход"))
-
+	sb.WriteString(dimStyle.Render("  q — выход"))
 	return sb.String()
 }
