@@ -15,7 +15,7 @@ import (
 
 // Version — версия сборки. По умолчанию для локальной сборки; на релизе
 // подставляется линкером: go build -ldflags "-X main.Version=X.Y.Z".
-var Version = "5.9.2"
+var Version = "5.9.3"
 
 func main() {
 	args := os.Args[1:]
@@ -106,6 +106,10 @@ func main() {
 	// Проверка обновлений стартует в фоне — чтобы утилита открывалась сразу,
 	// а уведомление показывалось уже после закрытия просмотра.
 	updCh := startBackgroundCheck()
+
+	// Прогрев суперфетча в фоне: пока пользователь смотрит список, тяжёлый сбор
+	// (подсчёт пакетов и т.п.) уже идёт — к открытию суперфетча кеш готов.
+	go tui.WarmSuperfetch()
 
 	model := tui.NewModel(results, animate)
 	p := tea.NewProgram(model, tea.WithAltScreen())

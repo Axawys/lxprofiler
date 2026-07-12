@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -71,10 +72,123 @@ func computeFetch(full bool) fetchInfo {
 		fetchCoreDone = true
 	}
 	if full && !fetchFullDone {
-		gatherExtended(&fetchCached)
+		// Свежий дисковый кеш «дорогой» части — мгновенно, без внешних команд;
+		// иначе собираем и сохраняем на будущее (в т.ч. для статического lxf).
+		if !loadFetchCache(&fetchCached) {
+			gatherExtended(&fetchCached)
+			saveFetchCache(fetchCached)
+		}
 		fetchFullDone = true
 	}
 	return fetchCached
+}
+
+// Кеш «дорогой» части суперфетча на диске: подсчёт пакетов и опрос железа
+// занимают до пары секунд, но меняются редко. Ядро (аптайм/ОЗУ/диск) всегда
+// пересобирается заново, возраст пересчитывается из даты установки — так что из
+// кеша берутся лишь редко меняющиеся поля (пакеты, GPU, дисплей, DE…).
+type fetchCache struct {
+	Time        int64  `json:"t"`
+	Sig         int64  `json:"sig"` // подпись баз пакетов: меняется при install/remove
+	InstallDate string `json:"install,omitempty"`
+	HasInstall  bool   `json:"has_install"`
+	GPU         string `json:"gpu,omitempty"`
+	Display     string `json:"display,omitempty"`
+	Shell       string `json:"shell,omitempty"`
+	DEWM        string `json:"dewm,omitempty"`
+	PkgKind     string `json:"pkg_kind,omitempty"`
+	Packages    int    `json:"pkgs,omitempty"`
+	FlatpakN    int    `json:"flatpak,omitempty"`
+	SnapN       int    `json:"snap,omitempty"`
+}
+
+// fetchCacheTTL — предел свежести на случай, если подпись баз не уловила
+// изменения (напр. обновление драйвера GPU); при обычной установке пакетов кеш
+// инвалидируется сразу по смене подписи.
+const fetchCacheTTL = 24 * time.Hour
+
+func fetchCachePath() string {
+	base := os.Getenv("XDG_STATE_HOME")
+	if base == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		base = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(base, "lxprofiler", "superfetch.json")
+}
+
+// pkgDBSignature — сумма mtime баз установленных пакетов (какие есть). Меняется
+// при установке/удалении пакета, поэтому служит ключом валидности кеша. Дёшево:
+// несколько stat.
+func pkgDBSignature() int64 {
+	paths := []string{
+		"/var/lib/rpm/rpmdb.sqlite", "/var/lib/rpm/Packages",
+		"/var/lib/dpkg/status", "/var/lib/pacman/local",
+		"/lib/apk/db/installed", "/var/db/xbps", "/var/db/pkg",
+		"/var/lib/flatpak", "/var/lib/snapd/snaps",
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".local/share/flatpak"))
+	}
+	var sig int64
+	for _, p := range paths {
+		if fi, err := os.Stat(p); err == nil {
+			sig += fi.ModTime().Unix()
+		}
+	}
+	return sig
+}
+
+// loadFetchCache применяет валидный дисковый кеш к fi; false — если кеша нет, он
+// устарел (по подписи или TTL) или битый. Возраст пересчитывается из даты
+// установки, чтобы не устаревать.
+func loadFetchCache(fi *fetchInfo) bool {
+	path := fetchCachePath()
+	if path == "" {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var c fetchCache
+	if json.Unmarshal(data, &c) != nil {
+		return false
+	}
+	if c.Sig != pkgDBSignature() || time.Since(time.Unix(c.Time, 0)) > fetchCacheTTL {
+		return false
+	}
+	fi.InstallDate, fi.HasInstall = c.InstallDate, c.HasInstall
+	if c.HasInstall {
+		if tm, err := time.Parse("2006-01-02", c.InstallDate); err == nil {
+			fi.AgeDays = int(time.Since(tm).Hours()) / 24
+		}
+	}
+	fi.GPU, fi.Display = c.GPU, c.Display
+	fi.Shell, fi.DEWM = c.Shell, c.DEWM
+	fi.PkgKind, fi.Packages = c.PkgKind, c.Packages
+	fi.FlatpakN, fi.SnapN = c.FlatpakN, c.SnapN
+	return true
+}
+
+// saveFetchCache сохраняет «дорогую» часть fi на диск с текущей подписью баз.
+func saveFetchCache(fi fetchInfo) {
+	path := fetchCachePath()
+	if path == "" {
+		return
+	}
+	c := fetchCache{
+		Time: time.Now().Unix(), Sig: pkgDBSignature(),
+		InstallDate: fi.InstallDate, HasInstall: fi.HasInstall,
+		GPU: fi.GPU, Display: fi.Display, Shell: fi.Shell, DEWM: fi.DEWM,
+		PkgKind: fi.PkgKind, Packages: fi.Packages, FlatpakN: fi.FlatpakN, SnapN: fi.SnapN,
+	}
+	if data, err := json.Marshal(c); err == nil {
+		_ = os.MkdirAll(filepath.Dir(path), 0o755)
+		_ = os.WriteFile(path, data, 0o644)
+	}
 }
 
 // gatherCore собирает то, что показывает даже краткий вид: пользователь/хост,
@@ -836,6 +950,12 @@ func fetchInfoMinimal(fi fetchInfo) []string {
 func RenderSuperfetch(full bool) string {
 	return renderFetch(Model{mode: FetchMode, fetchFull: full})
 }
+
+// WarmSuperfetch заранее собирает всю системную инфу (включая тяжёлый подсчёт
+// пакетов) в фоне — вызывается горутиной на старте TUI, пока пользователь
+// смотрит список. К моменту открытия суперфетча кеш уже готов, и подробный вид
+// открывается мгновенно. Запуск не тормозит: сбор идёт в отдельной горутине.
+func WarmSuperfetch() { computeFetch(true) }
 
 func renderFetch(m Model) string {
 	fi := computeFetch(m.fetchFull)
